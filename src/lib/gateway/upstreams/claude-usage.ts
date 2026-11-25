@@ -111,3 +111,9 @@ export function claudeWindows(payload: JsonMap): LimitWindow[] {
   });
   return windows;
 }
+
+export function claudeLimitWindows(payload: JsonMap): LimitWindow[] {
+  const windows = claudeWindows(payload);
+  if (payload.five_hour !== null || !asRecord(payload.seven_day)) return windows;
+  return [claudeWindow("five_hour", "", CLAUDE_FIVE_HOUR_SECONDS, {}), ...windows];
+}

@@ -2,7 +2,12 @@ import { gateway, resetGateway } from "./support/gateway-harness";
 import { recordedPrisma } from "./support/recorded-prisma";
 import assert from "node:assert/strict";
 import test, { beforeEach } from "node:test";
-import { KICKOFF_IDLE_RETRY_MS, KICKOFF_RESET_GRACE_MS, windowKickoffDue } from "@/lib/gateway/routing/quota";
+import {
+  KICKOFF_IDLE_RETRY_MS,
+  KICKOFF_RESET_GRACE_MS,
+  KICKOFF_UNSTARTED_SLACK_MS,
+  windowKickoffDue,
+} from "@/lib/gateway/routing/quota";
 import { sealTokens } from "@/lib/gateway/upstreams/credentials";
 import type { JsonMap } from "@/types/gateway";
 import type { LimitWindow, SubscriptionLimits } from "@/types/providers";
@@ -175,6 +180,36 @@ test("an unused plan window without a reset time is started at most once an hour
   assert.equal(windowKickoffDue(idle, "claude-haiku-4-5", NOW - KICKOFF_IDLE_RETRY_MS, NOW), true);
   const sonnetIdle = limits([window({ usedPercent: 20, resetsAt: at(NOW + HOUR) }), window({ scope: "Sonnet" })]);
   assert.equal(windowKickoffDue(sonnetIdle, "claude-sonnet-4-5", null, NOW), false);
+});
+
+test("an unused window whose reset moves with every read has not started and is kicked off", () => {
+  const unstarted = limits([
+    window({ resetsAt: at(NOW + 5 * HOUR) }),
+    window({ usedPercent: 30, windowSeconds: 604_800, resetsAt: at(NOW + 72 * HOUR) }),
+  ]);
+  assert.equal(windowKickoffDue(unstarted, "gpt-5.5", null, NOW), true);
+  assert.equal(windowKickoffDue(unstarted, "gpt-5.5", null, NOW + 10 * 60_000), true);
+  assert.equal(windowKickoffDue(unstarted, "gpt-5.5", NOW - KICKOFF_IDLE_RETRY_MS + 1, NOW), false);
+  assert.equal(windowKickoffDue(unstarted, "gpt-5.5", NOW - 6 * HOUR, NOW), true);
+  const started = limits([window({ resetsAt: at(NOW + 5 * HOUR - KICKOFF_UNSTARTED_SLACK_MS - 60_000) })]);
+  assert.equal(windowKickoffDue(started, "gpt-5.5", null, NOW), false);
+  const used = limits([window({ usedPercent: 1, resetsAt: at(NOW + 5 * HOUR) })]);
+  assert.equal(windowKickoffDue(used, "gpt-5.5", null, NOW), false);
+  const fromTraffic = { ...unstarted, observedAt: at(NOW + 60_000) };
+  assert.equal(windowKickoffDue(fromTraffic, "gpt-5.5", null, NOW + 2 * 60_000), false);
+});
+
+test("a read right after the reset still kicks off the next window", async () => {
+  const { runWindowKickoffs } = await import("@/lib/providers/window-kickoff");
+  snapshot.kickoffAt = new Date(NOW - 5 * HOUR - 60_000);
+  snapshot.limits = limits([
+    window({ resetsAt: at(NOW + 5 * HOUR - 20_000) }),
+    window({ usedPercent: 30, windowSeconds: 604_800, resetsAt: at(NOW + 72 * HOUR) }),
+  ], NOW - 20_000);
+  snapshot.fetchedAt = new Date(NOW - 20_000);
+  assert.equal(await runWindowKickoffs(NOW), 1);
+  assert.equal(messageCalls().length, 1);
+  assert.equal(snapshot.kickoffAt?.getTime(), NOW);
 });
 
 test("the sweep pings an account whose window reset with the chosen model, once per reset", async () => {

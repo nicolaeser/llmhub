@@ -312,6 +312,28 @@ test("provider auth refreshes an expiring session once and stores the rotated to
   assert.equal(calls.length, 1);
 });
 
+test("a refresh that brings no plan keeps a plan saved while it ran", async () => {
+  const { providerAuth } = await import("@/lib/gateway/upstreams/credentials");
+  await seedLogin("p-plan", Date.now() + 60_000, "r1", "grok_build");
+  respondWith(() => {
+    logins.get("p-plan")!.plan = "SuperGrok Heavy";
+    return Response.json({ access_token: "fresh", refresh_token: "r2", expires_in: 3600 });
+  });
+  const auth = await providerAuth({ id: "p-plan", kind: "grok_build", apiKey: "" });
+  assert.equal(auth.key, "fresh");
+  assert.equal(logins.get("p-plan")!.plan, "SuperGrok Heavy");
+  assert.equal(logins.get("p-plan")!.version, 1);
+});
+
+test("a refresh that brings a new plan saves it", async () => {
+  const { providerAuth } = await import("@/lib/gateway/upstreams/credentials");
+  await seedLogin("p-plan2", Date.now() + 60_000);
+  const idToken = jwt({ email: "dev@example.com", "https://api.openai.com/auth": { chatgpt_plan_type: "team" } });
+  respondWith(() => Response.json({ access_token: jwt({ exp: inOneHour() }), refresh_token: "r2", id_token: idToken }));
+  await providerAuth({ id: "p-plan2", kind: "codex", apiKey: "" });
+  assert.equal(logins.get("p-plan2")!.plan, "team");
+});
+
 test("a revoked refresh token marks the sign-in expired and fails closed", async () => {
   const { providerAuth } = await import("@/lib/gateway/upstreams/credentials");
   const { GateError } = await import("@/lib/gateway/errors");
@@ -875,6 +897,25 @@ test("Claude usage maps the five hour, weekly, and model weekly windows", async 
   ]);
   assert.equal(limits.resetCredits, null);
   assert.deepEqual(claudeLimits({}, "", 0).windows, []);
+});
+
+test("a Claude five hour window reported as null is an unstarted window when the week is reported", async () => {
+  const { claudeLimits } = await import("@/lib/gateway/upstreams/subscription-limits");
+  const week = { utilization: 12, resets_at: "2026-10-15T09:00:00Z" };
+  const limits = claudeLimits({ five_hour: null, seven_day: week }, "pro", 0);
+  assert.deepEqual(limits.windows[0], {
+    key: "five_hour",
+    scope: "",
+    usedPercent: 0,
+    windowSeconds: 18_000,
+    resetsAt: null,
+    limitReached: false,
+  });
+  assert.deepEqual(claudeLimits({ five_hour: null }, "", 0).windows, []);
+  assert.deepEqual(
+    claudeLimits({ seven_day: week }, "", 0).windows.map((window) => window.key),
+    ["seven_day"],
+  );
 });
 
 test("Claude subscription limits call the OAuth usage endpoint with the beta header", async () => {

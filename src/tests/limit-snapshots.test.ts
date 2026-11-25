@@ -33,7 +33,12 @@ const deploymentsByProvider = new Map<string, string[]>();
       const row = logins.get(where.providerId);
       return row ? { ...row } : null;
     },
-    updateMany: async () => ({ count: 0 }),
+    updateMany: async ({ where, data }: { where: { providerId: string; plan?: { not: string } }; data: { plan?: string } }) => {
+      const row = logins.get(where.providerId);
+      if (!row || where.plan === undefined || data.plan === undefined || row.plan === data.plan) return { count: 0 };
+      row.plan = data.plan;
+      return { count: 1 };
+    },
   },
   providerConnection: {
     findUnique: async ({ where }: { where: { id: string } }) => {
@@ -97,9 +102,25 @@ function claudeUsage(used: number) {
   });
 }
 
+let profileReads: string[] = [];
+let profilePlan: Record<string, boolean> = { has_claude_max: true };
+
+function profileRead(url: string): boolean {
+  return url === "https://api.anthropic.com/api/oauth/profile";
+}
+
+function claudeProfile(): Response {
+  return Response.json({ account: profilePlan, organization: { organization_type: "claude_max" } });
+}
+
 function respond(reply: () => Response | Promise<Response>) {
   globalThis.fetch = (async (input: string | URL | Request) => {
-    upstreamCalls.push(String(input));
+    const url = String(input);
+    if (profileRead(url)) {
+      profileReads.push(url);
+      return claudeProfile();
+    }
+    upstreamCalls.push(url);
     return reply();
   }) as typeof fetch;
 }
@@ -169,6 +190,8 @@ function stored(change: Partial<StoredLimitSnapshot> = {}): StoredLimitSnapshot 
 
 beforeEach(() => {
   upstreamCalls = [];
+  profileReads = [];
+  profilePlan = { has_claude_max: true };
   snapshotRows.clear();
   settings.clear();
 });
@@ -194,9 +217,9 @@ test("accounts are polled every three minutes with jitter and right after an exh
 });
 
 test("Claude accounts are polled every three minutes, every thirty while traffic reports open limits, and after an exhausted window resets", async () => {
-  const { nextPollAt, CLAUDE_POLL_MS, RESET_GRACE_MS } = await import("@/lib/gateway/upstreams/limit-store");
+  const { nextPollAt, HEADER_POLL_MS, RESET_GRACE_MS } = await import("@/lib/gateway/upstreams/limit-store");
   const now = 1_000_000_000_000;
-  assert.equal(CLAUDE_POLL_MS, 30 * MINUTE);
+  assert.equal(HEADER_POLL_MS, 30 * MINUTE);
   assert.equal(nextPollAt("claude", null, now, () => 0.5, true), now + 30 * MINUTE);
   assert.equal(nextPollAt("claude", null, now, () => 0, true), now + Math.round(30 * MINUTE * 0.85));
   assert.equal(nextPollAt("claude", null, now, () => 1, true), now + Math.round(30 * MINUTE * 1.15));
@@ -610,8 +633,93 @@ async function settle(): Promise<void> {
   for (let tick = 0; tick < 20; tick++) await new Promise((resolve) => setImmediate(resolve));
 }
 
+test("a full read picks up a changed plan, from Claude's profile at most once an hour", async () => {
+  const { fetchSubscriptionLimits, forgetLimits } = await import("@/lib/gateway/upstreams/subscription-limits");
+  const target = await account("claude");
+  respond(() => claudeUsage(10));
+  assert.equal((await fetchSubscriptionLimits(target))?.plan, "max");
+  assert.equal(logins.get(target.id)?.plan, "max");
+  profilePlan = { has_claude_max: false, has_claude_pro: true };
+  assert.equal((await fetchSubscriptionLimits(target))?.plan, "max");
+  assert.equal(profileReads.length, 1);
+  await forgetLimits(target.id);
+  assert.equal((await fetchSubscriptionLimits(target))?.plan, "pro");
+  assert.equal(logins.get(target.id)?.plan, "pro");
+  assert.equal(profileReads.length, 2);
+  const codex = await account("codex");
+  respond(() => Response.json({ plan_type: "pro", rate_limit: null }));
+  logins.get(codex.id)!.plan = "plus";
+  assert.equal((await fetchSubscriptionLimits(codex))?.plan, "pro");
+  assert.equal(logins.get(codex.id)?.plan, "pro");
+});
+
+function codexHeaders(primary: number, secondary: number, now: number): Headers {
+  return new Headers({
+    "x-codex-primary-used-percent": String(primary),
+    "x-codex-primary-window-minutes": "300",
+    "x-codex-primary-reset-at": String(Math.floor((now + 2 * HOUR) / 1000)),
+    "x-codex-secondary-used-percent": String(secondary),
+    "x-codex-secondary-window-minutes": "10080",
+    "x-codex-secondary-reset-after-seconds": String(80 * 3_600),
+  });
+}
+
+test("Codex response headers become plan windows with their reset times", async () => {
+  const { codexHeaderWindows } = await import("@/lib/gateway/upstreams/observed-limits");
+  const now = Date.parse("2026-11-25T10:00:00.000Z");
+  assert.deepEqual(codexHeaderWindows(codexHeaders(37.5, 100, now), now), [
+    { scope: "", usedPercent: 37.5, windowSeconds: 18_000, resetsAt: new Date(now + 2 * HOUR).toISOString(), limitReached: false },
+    { scope: "", usedPercent: 100, windowSeconds: 604_800, resetsAt: new Date(now + 80 * HOUR).toISOString(), limitReached: true },
+  ]);
+  const partial = new Headers({ "x-codex-primary-used-percent": "12", "x-codex-secondary-window-minutes": "10080" });
+  assert.deepEqual(codexHeaderWindows(partial, now), []);
+  assert.deepEqual(codexHeaderWindows(new Headers({ "content-type": "text/event-stream" }), now), []);
+});
+
+test("Codex traffic headers update the stored plan windows live, keep scoped windows, and poll every thirty minutes", async () => {
+  const { observeCodexLimits, readStoredSnapshot, nextPollAt, HEADER_POLL_MS } = await import(
+    "@/lib/gateway/upstreams/limit-store"
+  );
+  const { limitsSnapshot } = await import("@/lib/gateway/upstreams/subscription-limits");
+  const now = Date.now();
+  const target = await account("codex");
+  const fetchedAt = now - 10 * MINUTE;
+  seedSnapshot(target.id, {
+    limits: {
+      plan: "pro",
+      windows: [
+        { scope: "", usedPercent: 10, windowSeconds: 18_000, resetsAt: new Date(now + 2 * HOUR).toISOString(), limitReached: false },
+        { scope: "", usedPercent: 20, windowSeconds: 604_800, resetsAt: new Date(now + 80 * HOUR).toISOString(), limitReached: false },
+        { scope: "GPT-5.3-Codex-Spark", usedPercent: 5, windowSeconds: 18_000, resetsAt: null, limitReached: false },
+      ],
+      credits: null,
+      resetCredits: null,
+      extraUsage: null,
+      fetchedAt: new Date(fetchedAt).toISOString(),
+    },
+    fetchedAt: new Date(fetchedAt),
+    checkedAt: new Date(fetchedAt),
+    nextAt: new Date(now + MINUTE),
+    loginVersion: 3,
+    version: 1,
+  });
+  forbidUpstream();
+  assert.equal(await observeCodexLimits(target.id, codexHeaders(55, 30, now), now), true);
+  const stored = await readStoredSnapshot(target.id);
+  assert.equal(stored?.fetchedAt, fetchedAt);
+  assert.equal(stored?.nextAt, now + HEADER_POLL_MS);
+  assert.deepEqual(
+    stored?.limits?.windows.map((window) => [window.scope, window.usedPercent]),
+    [["", 55], ["", 30], ["GPT-5.3-Codex-Spark", 5]],
+  );
+  assert.equal(limitsSnapshot(target.id)?.windows[0]?.usedPercent, 55);
+  assert.equal(nextPollAt("codex", stored!.limits, now, () => 0.5), now + HEADER_POLL_MS);
+  assert.equal(nextPollAt("codex", { ...stored!.limits!, observedAt: undefined }, now, () => 0.5), now + 3 * MINUTE);
+  assert.equal(upstreamCalls.length, 0);
+});
+
 test("traffic headers update the plan windows, keep model limits and extra usage, and push the full poll out", async () => {
-  const { observeClaudeLimits, readStoredSnapshot, CLAUDE_POLL_MS } = await import("@/lib/gateway/upstreams/limit-store");
+  const { observeClaudeLimits, readStoredSnapshot, HEADER_POLL_MS } = await import("@/lib/gateway/upstreams/limit-store");
   const { limitsSnapshot } = await import("@/lib/gateway/upstreams/subscription-limits");
   const now = Date.now();
   const target = await seededClaude(now);
@@ -620,7 +728,7 @@ test("traffic headers update the plan windows, keep model limits and extra usage
   const stored = await readStoredSnapshot(target.id);
   assert.equal(stored?.version, 2);
   assert.equal(stored?.fetchedAt, now - 10 * MINUTE);
-  assert.equal(stored?.nextAt, now + CLAUDE_POLL_MS);
+  assert.equal(stored?.nextAt, now + HEADER_POLL_MS);
   assert.equal(stored?.limits?.plan, "max");
   assert.equal(stored?.limits?.observedAt, new Date(now).toISOString());
   assert.deepEqual(
@@ -903,6 +1011,7 @@ test("refreshing all accounts answers within its wait, and a stalled provider ho
   const gate = gated();
   globalThis.fetch = (async (input: string | URL | Request) => {
     const url = String(input);
+    if (profileRead(url)) return claudeProfile();
     upstreamCalls.push(url);
     if (creditsRead(url)) return noCredits();
     if (!anthropic(url)) return usage(20);

@@ -252,10 +252,21 @@ async function latestUsable(providerId: string): Promise<SignInSession> {
   throw signInRequired();
 }
 
-async function saveRefreshed(providerId: string, version: number, session: SignInSession, now: number): Promise<boolean> {
+function refreshedData(session: SignInSession, now: number, startPlan: string | null) {
+  const { plan, ...data } = loginData(session, now);
+  return plan === startPlan ? data : { ...data, plan };
+}
+
+async function saveRefreshed(
+  providerId: string,
+  version: number,
+  session: SignInSession,
+  now: number,
+  startPlan: string | null = null,
+): Promise<boolean> {
   const saved = await prisma.providerLogin.updateMany({
     where: { providerId, version },
-    data: { ...loginData(session, now), version: { increment: 1 } },
+    data: { ...refreshedData(session, now, startPlan), version: { increment: 1 } },
   });
   return saved.count === 1;
 }
@@ -322,7 +333,7 @@ async function renew(row: LoginRow, current: SignInSession, kind: SignInKind, mo
     await journalLogin(row.providerId, kind, outcome.session, now);
     let saved: boolean;
     try {
-      saved = await saveRefreshed(row.providerId, row.version, outcome.session, now);
+      saved = await saveRefreshed(row.providerId, row.version, outcome.session, now, row.plan);
     } catch (err) {
       unsaved.set(row.providerId, { session: outcome.session, version: row.version, refreshedAt: now });
       logger.error("provider.sign_in_tokens_unsaved", { provider: row.providerId, kind, ...errorFields(err) });
