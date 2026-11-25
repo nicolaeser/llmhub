@@ -22,10 +22,14 @@ import { download, exportHref } from "../_components/log-export";
 import SessionChat from "../_components/session-chat";
 import { ActiveChip, useCallerLabels } from "../_components/session-cells";
 import { useSessionFormat } from "../_components/session-format";
+import KeyUsageCard from "../_components/key-usage-card";
+import RunningRequests from "../_components/running-requests";
 import SessionTrace from "../_components/session-trace";
 import { useLiveReload } from "../_components/use-live-reload";
+import { useLogStream } from "../_components/use-log-stream";
 
 const VIEWS = ["chat", "requests"] as const;
+const IGNORE_ROWS = () => {};
 type View = (typeof VIEWS)[number];
 
 function refOf(search: string): LogSessionRef | null {
@@ -59,6 +63,14 @@ export default function LogSessionPage() {
   });
   const { data, pending, setData } = state;
   const page = data?.page ?? 1;
+  const streamFilters = useMemo(
+    () =>
+      sessionRef
+        ? { ...NO_FILTERS, session: sessionRef.sessionId, keyId: sessionRef.keyId, userId: sessionRef.userId }
+        : null,
+    [sessionRef],
+  );
+  const stream = useLogStream(data ? streamFilters : null, data?.session.lastAt ?? null, IGNORE_ROWS);
 
   const refresh = useCallback(() => {
     if (!sessionRef) return;
@@ -66,7 +78,7 @@ export default function LogSessionPage() {
       if (!isActionFail(res)) setData((current) => (current.page === res.page ? res : current));
     });
   }, [sessionRef, page, setData]);
-  useLiveReload(Boolean(data?.session.active) && !pending, refresh);
+  useLiveReload(Boolean(data) && !pending, stream, refresh, Boolean(data?.session.active));
 
   function openDetail(id: string) {
     setDetail(null);
@@ -169,15 +181,25 @@ export default function LogSessionPage() {
         </Tabs.ListContainer>
       </Tabs>
       <LoadError state={state} className="mb-4" />
+      {sessionRef.keyId ? <KeyUsageCard key={sessionRef.keyId} keyId={sessionRef.keyId} stream={stream} className="mb-4" /> : null}
       {view === "chat" ? (
-        <SessionChat sessionRef={sessionRef} agent={summary.agent} active={summary.active} onOpenRequest={openDetail} />
+        <SessionChat
+          sessionRef={sessionRef}
+          agent={summary.agent}
+          active={summary.active}
+          stream={stream}
+          onOpenRequest={openDetail}
+        />
       ) : (
+        <>
+        <RunningRequests items={stream.running} className="mb-4" />
         <SessionTrace
           data={data}
           pending={pending}
           onPage={(next) => state.reloadWith(() => loadLogSessionAction({ ref: sessionRef, page: next }))}
           onOpenRequest={openDetail}
         />
+        </>
       )}
       <LogDetailDialog
         state={detailState}

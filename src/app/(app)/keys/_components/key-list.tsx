@@ -17,6 +17,7 @@ import { meterColor } from "@/lib/utils/budget";
 import type { KeyBindingKind, KeyHolds, KeyLastUse, KeyOptions, VirtualKeyView } from "@/types/keys";
 
 const ALL = "all";
+const USED_TEXT = { accent: "text-muted", warning: "text-warning", danger: "text-danger" } as const;
 const STATES: KeyState[] = ["active", "paused", "blocked"];
 const KINDS: KeyBindingKind[] = ["project", "member", "internal"];
 
@@ -162,11 +163,15 @@ export default function KeyList({
       budget: row.max_budget,
     });
     if (!(row.max_budget > 0)) return <span className="text-sm tabular-nums">{label}</span>;
-    const ratio = Math.min(1, row.spend / row.max_budget);
+    const used = row.spend / row.max_budget;
+    const tone = meterColor(used);
     return (
       <span className="block min-w-0 space-y-1.5">
-        <span className="block text-sm tabular-nums">{label}</span>
-        <Meter size="sm" value={ratio * 100} color={meterColor(ratio)} aria-label={t("columns.spend")}>
+        <span className="flex flex-wrap items-baseline justify-between gap-x-3">
+          <span className="text-sm tabular-nums">{label}</span>
+          <span className={`text-xs font-medium tabular-nums ${USED_TEXT[tone]}`}>{format.number(used, "percent")}</span>
+        </span>
+        <Meter size="sm" value={Math.min(1, used) * 100} color={tone} aria-label={t("columns.spend")}>
           <Meter.Track>
             <Meter.Fill />
           </Meter.Track>

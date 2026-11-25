@@ -98,6 +98,7 @@ export type LoggingSettingsView = {
   storage: ContentStorage | null;
   logArchive: boolean;
   logContent: boolean;
+  logAttachments: boolean;
   s3Ready: boolean;
   canManage: boolean;
   budgetAlerts: { thresholds: number[]; canManage: boolean };
@@ -146,6 +147,7 @@ export type Enterprise = {
   cache_semantic?: SemanticCacheSettings;
   log_archive?: boolean;
   log_content?: boolean;
+  log_attachments?: boolean;
   content_retention_days?: number;
   content_max_gb?: number;
   pii?: PiiPolicy;

@@ -17,7 +17,7 @@ import type { UpdaterSnapshot } from "@/types/updates";
 
 export const LIVE_HEARTBEAT_MS = 15_000;
 export const LIVE_RETRY_MS = 3_000;
-const ACCESS_RECHECK_MS = 15_000;
+export const LIVE_ACCESS_RECHECK_MS = 15_000;
 
 export const LIVE_HEADERS: Record<string, string> = {
   "Content-Type": "text/event-stream; charset=utf-8",
@@ -40,7 +40,7 @@ export function sseEvent(event: string, data: string): string {
   return `event: ${event}\ndata: ${data}\n\n`;
 }
 
-function sessionAccess(workspaceOrgId: string | null) {
+export function liveSessionAccess(workspaceOrgId: string | null) {
   return async (sessionId: string, now: number): Promise<LiveAccess | null> => {
     const row = await prisma.session.findUnique({
       where: { id: sessionId },
@@ -95,7 +95,7 @@ export function liveStream(input: {
 }): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   const loadSnapshot = input.loadSnapshot ?? (() => updaterSnapshot());
-  const checkAccess = input.checkAccess ?? sessionAccess(input.workspaceOrgId ?? null);
+  const checkAccess = input.checkAccess ?? liveSessionAccess(input.workspaceOrgId ?? null);
   const feeds = input.feeds ?? LIVE_FEEDS;
   const topics = new Map<LiveTopic, { key: string; stop: () => void }>();
   let access = input.access;
@@ -214,7 +214,7 @@ export function liveStream(input: {
       heartbeat = setInterval(() => {
         const now = Date.now();
         send(sseEvent("ping", String(now)));
-        if (now - accessCheckedAt >= (input.accessCheckMs ?? ACCESS_RECHECK_MS)) void recheckAccess(now);
+        if (now - accessCheckedAt >= (input.accessCheckMs ?? LIVE_ACCESS_RECHECK_MS)) void recheckAccess(now);
       }, input.heartbeatMs ?? LIVE_HEARTBEAT_MS);
     },
     cancel() {

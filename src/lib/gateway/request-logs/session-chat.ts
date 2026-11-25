@@ -21,8 +21,18 @@ function isSystem(entry: TranscriptEntry): boolean {
   return SYSTEM_ROLES.has(entry.role);
 }
 
+function sameAttachment(a: TranscriptEntry, b: TranscriptEntry): boolean {
+  return !a.attachment || !b.attachment || a.attachment.id === b.attachment.id;
+}
+
 function sameEntry(a: TranscriptEntry, b: TranscriptEntry): boolean {
-  return a.role === b.role && a.kind === b.kind && (a.name ?? "") === (b.name ?? "") && a.text.trim() === b.text.trim();
+  return (
+    a.role === b.role &&
+    a.kind === b.kind &&
+    (a.name ?? "") === (b.name ?? "") &&
+    a.text.trim() === b.text.trim() &&
+    sameAttachment(a, b)
+  );
 }
 
 function head(entry: TranscriptEntry | undefined): string {

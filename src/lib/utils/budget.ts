@@ -36,8 +36,11 @@ export function headroom(chain: CapLink[]): { amount: number; link: CapLink } | 
   return best;
 }
 
+export const BUDGET_WARNING_RATIO = 0.8;
+export const BUDGET_DANGER_RATIO = 0.95;
+
 export function meterColor(ratio: number): "accent" | "warning" | "danger" {
-  if (ratio >= 1) return "danger";
-  if (ratio >= 0.8) return "warning";
+  if (ratio >= BUDGET_DANGER_RATIO) return "danger";
+  if (ratio >= BUDGET_WARNING_RATIO) return "warning";
   return "accent";
 }
