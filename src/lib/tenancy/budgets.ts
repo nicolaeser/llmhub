@@ -10,7 +10,15 @@ import { forecastBudget, spendWindow } from "@/lib/usage/forecast";
 import { resolveKeyTenancy } from "@/lib/gateway/access/key-tenancy";
 import { parseBudgetDurationMs } from "@/lib/gateway/billing/period";
 import { patchEnterprise } from "@/lib/settings/enterprise";
-import { budgetAmount, budgetPeriod, capConflict, MAX_BOOST_HOURS } from "@/lib/utils/budget";
+import {
+  budgetAmount,
+  budgetMode,
+  budgetPeriod,
+  capConflict,
+  MAX_BOOST_HOURS,
+  overrunPercent,
+  parseBudgetMode,
+} from "@/lib/utils/budget";
 import { money } from "@/lib/utils/money";
 import type { AuthenticatedSession } from "@/types/auth";
 import type { SpendHolder } from "@/types/billing";
@@ -19,6 +27,7 @@ import type {
   BudgetDetail,
   BudgetInput,
   BudgetKind,
+  BudgetMode,
   BudgetRef,
   BudgetResult,
   BudgetView,
@@ -34,6 +43,8 @@ export const HOLDER = {
   spend: true,
   maxBudget: true,
   budgetDuration: true,
+  budgetMode: true,
+  budgetOverrunPct: true,
   spendResetAt: true,
   createdAt: true,
 } as const;
@@ -58,10 +69,13 @@ export function budgetView(
     window.remainingDays,
   );
   const windowMs = parseBudgetDurationMs(row.budgetDuration);
+  const mode = budgetMode(row.budgetMode);
   return {
     maxBudget,
     spend,
     budgetDuration: row.budgetDuration,
+    budgetMode: mode,
+    overrunPct: mode === "soft" ? row.budgetOverrunPct : null,
     boost,
     boosts: boosts.map((item) => ({
       id: item.id,
@@ -207,7 +221,13 @@ async function budgetResult(
 async function writeBudget(
   kind: BudgetKind,
   id: string,
-  data: { maxBudget: number; budgetDuration: string; spendResetAt?: Date },
+  data: {
+    maxBudget: number;
+    budgetDuration: string;
+    budgetMode: BudgetMode;
+    budgetOverrunPct: number | null;
+    spendResetAt?: Date;
+  },
 ) {
   if (kind === "org") await prisma.organization.update({ where: { id }, data });
   else if (kind === "team") await prisma.team.update({ where: { id }, data });
@@ -267,6 +287,10 @@ export async function setBudget(input: BudgetInput) {
   const now = new Date();
   const record = await holderRecord(session, input.kind, id);
   if (!record) throw new Error("NOT_FOUND");
+  const mode = input.budgetMode === undefined ? budgetMode(record.row.budgetMode) : parseBudgetMode(input.budgetMode);
+  const overrun = input.overrunPct === undefined ? record.row.budgetOverrunPct : overrunPercent(input.overrunPct);
+  if (mode === null || overrun === undefined) throw new Error("VALIDATION");
+  const budgetOverrunPct = mode === "soft" ? overrun : null;
   await assertHolderManageable(session, input.kind, id);
   if (capConflict(maxBudget, await ancestorsOf(session, record, now))) {
     throw new Error("BUDGET_EXCEEDS_PARENT");
@@ -275,6 +299,8 @@ export async function setBudget(input: BudgetInput) {
   await writeBudget(input.kind, id, {
     maxBudget,
     budgetDuration,
+    budgetMode: mode,
+    budgetOverrunPct,
     ...(periodChanged ? { spendResetAt: now } : {}),
   });
   await writeAudit({
@@ -282,8 +308,13 @@ export async function setBudget(input: BudgetInput) {
     action: "budget.update",
     objectType: input.kind,
     objectId: id,
-    before: { maxBudget: money(record.row.maxBudget), budgetDuration: record.row.budgetDuration },
-    after: { maxBudget, budgetDuration },
+    before: {
+      maxBudget: money(record.row.maxBudget),
+      budgetDuration: record.row.budgetDuration,
+      budgetMode: budgetMode(record.row.budgetMode),
+      overrunPct: record.row.budgetOverrunPct,
+    },
+    after: { maxBudget, budgetDuration, budgetMode: mode, overrunPct: budgetOverrunPct },
   });
   return budgetResult(session, input.kind, id);
 }

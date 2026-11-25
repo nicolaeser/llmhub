@@ -467,7 +467,7 @@ test("assertBudget is async and resolves to the remaining budget", async () => {
   table("virtualKey").set("key_1", { id: "key_1", spend: 4, maxBudget: 10, budgetDuration: "", spendResetAt: null, createdAt: new Date() });
   const pending = assertBudget(principal({ key: keyView() }));
   assert.ok(pending instanceof Promise);
-  assert.deepEqual(await pending, { limit: 6, budget: "key" });
+  assert.deepEqual(await pending, { cap: { limit: 6, budget: "key" }, ceilings: [] });
 
   table("virtualKey").set("key_1", { id: "key_1", spend: 10, maxBudget: 10, budgetDuration: "", spendResetAt: null, createdAt: new Date() });
   await assert.rejects(assertBudget(principal({ key: keyView() })), rejectsWith(429, "budget_exceeded", "key budget exceeded"));

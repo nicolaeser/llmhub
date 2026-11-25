@@ -59,7 +59,7 @@ test("a period reset only lands while the row still holds the reset time it read
       afterUserRead = null;
       await db.user.update({ where: { id }, data: { spend: 3, spendResetAt: otherReset } });
     };
-    assert.deepEqual(await assertBudget(principal), { limit: 100, budget: "user" });
+    assert.deepEqual(await assertBudget(principal), { cap: { limit: 100, budget: "user" }, ceilings: [] });
     const kept = await db.user.findUniqueOrThrow({ where: { id: user.id } });
     assert.equal(kept.spend.toNumber(), 3);
     assert.equal(kept.spendResetAt?.getTime(), otherReset.getTime());

@@ -9,6 +9,8 @@ model Organization {
   maxBudget       Decimal   @default(0) @db.Decimal(20, 10)
   spend           Decimal   @default(0) @db.Decimal(20, 10)
   budgetDuration  String    @default("")
+  budgetMode      String    @default("soft")
+  budgetOverrunPct Int?
   spendResetAt    DateTime?
   labelKeys       String[]  @default([])
   paused          Boolean   @default(false)
@@ -45,6 +47,8 @@ model Team {
   maxBudget      Decimal       @default(0) @db.Decimal(20, 10)
   spend          Decimal       @default(0) @db.Decimal(20, 10)
   budgetDuration String        @default("")
+  budgetMode     String        @default("soft")
+  budgetOverrunPct Int?
   rpmLimit       Int           @default(0)
   tpmLimit       Int           @default(0)
   spendResetAt   DateTime?
@@ -98,6 +102,8 @@ model Project {
   maxBudget       Decimal       @default(0) @db.Decimal(20, 10)
   spend           Decimal       @default(0) @db.Decimal(20, 10)
   budgetDuration  String        @default("")
+  budgetMode      String        @default("soft")
+  budgetOverrunPct Int?
   spendResetAt    DateTime?
   paused          Boolean       @default(false)
   pausedUntil     DateTime?
@@ -130,6 +136,8 @@ model Member {
   maxBudget      Decimal      @default(0) @db.Decimal(20, 10)
   spend          Decimal      @default(0) @db.Decimal(20, 10)
   budgetDuration String       @default("")
+  budgetMode     String       @default("soft")
+  budgetOverrunPct Int?
   spendResetAt   DateTime?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -166,6 +174,8 @@ model VirtualKey {
   tpmLimit         Int           @default(0)
   maxRequestCost   Decimal       @default(0) @db.Decimal(20, 10)
   budgetDuration   String        @default("")
+  budgetMode       String        @default("soft")
+  budgetOverrunPct Int?
   expiresAt        DateTime?
   allowedIps       Json          @default("[]")
   allowedEndpoints Json          @default("[]")
@@ -754,6 +764,20 @@ model TempBudget {
   until      DateTime
 
   @@index([entityType, entityId])
+}
+
+model BudgetHold {
+  id         String   @id @default(cuid())
+  holdId     String
+  entityType String
+  entityId   String
+  amount     Decimal  @db.Decimal(20, 10)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId, expiresAt])
+  @@index([holdId])
+  @@index([expiresAt])
 }
 
 model GatewayAuditLog {

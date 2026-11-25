@@ -1,4 +1,4 @@
-import type { CostCap } from "@/types/billing";
+import type { BudgetCeiling, CostCap } from "@/types/billing";
 import type { OutputGuard, PiiMode } from "@/types/guardrails";
 import type { VirtualKeyView } from "@/types/keys";
 import type { HeldPause } from "@/types/structure";
@@ -38,6 +38,8 @@ export type RequestTrace = {
   guardOutput: Set<string>;
   guardBlocked: boolean;
   costCap?: CostCap | null;
+  ceilings?: BudgetCeiling[];
+  holds?: string[];
   labels?: LabelCandidates;
   sessionHeaders?: Record<string, string>;
   affinityDeployment?: string;

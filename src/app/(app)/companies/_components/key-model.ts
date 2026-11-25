@@ -22,6 +22,8 @@ function freshBudget(key: VirtualKeyView): BudgetView {
     maxBudget: key.max_budget,
     spend: key.spend,
     budgetDuration: key.budget_duration,
+    budgetMode: "soft",
+    overrunPct: null,
     boost: 0,
     boosts: [],
     resetsAt: null,

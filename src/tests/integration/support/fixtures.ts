@@ -37,7 +37,7 @@ export class TestData {
   private readonly attemptKeys: string[] = [];
   private readonly signInEmails: string[] = [];
 
-  async org(data: { maxBudget?: number } = {}) {
+  async org(data: { maxBudget?: number; budgetMode?: string; budgetOverrunPct?: number | null } = {}) {
     const org = await prisma.organization.create({ data: { alias: uniqueName("org"), ...data } });
     this.orgIds.push(org.id);
     return org;
@@ -113,6 +113,7 @@ export class TestData {
     );
     const entityIds = [...orgIds, ...userIds, ...teams.map((row) => row.id), ...projectIds, ...memberIds, ...keyIds];
     await prisma.tempBudget.deleteMany({ where: { entityId: { in: entityIds } } });
+    await prisma.budgetHold.deleteMany({ where: { entityId: { in: entityIds } } });
     await prisma.usageReport.deleteMany({ where: inOrg });
     await prisma.virtualKey.deleteMany({ where: { id: { in: keyIds } } });
     await prisma.gatewayAuditLog.deleteMany({

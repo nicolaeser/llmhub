@@ -50,6 +50,7 @@ import { hiddenFrom } from "@/lib/gateway/routing/route-pool";
 import { routePermitted } from "@/lib/gateway/access/model-policy";
 import { priceWindowQuery, priceWindowRates } from "@/lib/gateway/billing/price-schedule";
 import { costRejection } from "@/lib/gateway/billing/cost-cap";
+import { holdRequestBudget } from "@/lib/gateway/billing/hold-request";
 import {
   adaptiveLimits,
   COOLDOWN_MS,
@@ -327,10 +328,11 @@ function affordable(
   ready: ResolvedDeployment[],
   cost: CostFilter | undefined,
 ): ResolvedDeployment[] {
-  if (!cost) return ready;
+  const cap = cost?.cap;
+  if (!cap) return ready;
   const estimates = ready.map((dep) => cost.estimate(dep, group));
-  const fitting = ready.filter((_, index) => estimates[index]! <= cost.cap.limit);
-  if (!fitting.length) throw costRejection(cost.cap, Math.min(...estimates));
+  const fitting = ready.filter((_, index) => estimates[index]! <= cap.limit);
+  if (!fitting.length) throw costRejection(cap, Math.min(...estimates));
   return fitting;
 }
 
@@ -533,6 +535,14 @@ export async function acquireGroup(
   const target = targets.get(dep.id)!;
   const keyTarget = keyConcurrencyTarget(dep, access, keyLimits);
   const releasePermit = await takeDeploymentPermits(dep, target, keyTarget, run?.signal);
+  if (cost?.hold) {
+    try {
+      await holdRequestBudget(cost.hold, dep, group);
+    } catch (err) {
+      releasePermit();
+      throw err;
+    }
+  }
   const pinned = pinOf(dep, pins);
   const affinity: SessionAffinity | null = group.session_affinity ? { outcome: plan?.outcome ?? "off", key: session } : null;
   if (plan) settleDeploymentPin(group.alias, session, plan.outcome, dep.id);
