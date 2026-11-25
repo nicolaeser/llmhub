@@ -274,7 +274,7 @@ export type McpDraft = McpDraftServer & {
 export type McpMediaModel = {
   alias: string;
   label: string;
-  media: boolean;
+  kinds: McpMediaKind[];
 };
 
 export type McpBuilderModel = {
@@ -376,6 +376,7 @@ export type McpToolCall = {
 
 export type McpExecutor = {
   call(bound: McpBoundTool, args: JsonMap, signal: AbortSignal): Promise<McpToolOutcome>;
+  timeoutMs(bound: McpBoundTool): number;
   close(): Promise<void>;
 };
 

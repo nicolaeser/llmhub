@@ -10,7 +10,6 @@ import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { cancelQuietly } from "@/lib/utils/streams";
 import { parseJsonOrNull } from "@/lib/utils/json";
-import { MCP_REQUEST_TIMEOUT_MS } from "@/lib/mcp/client";
 import { mcpErrorCode } from "@/lib/mcp/errors";
 import { screenToolResult, traceStep } from "@/lib/mcp/screen";
 import { withChatHubInstruction } from "@/lib/mcp/instruction";
@@ -143,7 +142,7 @@ async function runTool(ctx: McpLoopContext, call: McpToolCall, deadline: number)
   if (!args) return { text: "Invalid tool arguments: expected a JSON object.", isError: true };
   const remaining = deadline - Date.now();
   if (remaining <= 0) return { text: "Skipped: the gateway's tool time limit was reached.", isError: true };
-  const signals = [AbortSignal.timeout(Math.min(MCP_REQUEST_TIMEOUT_MS, remaining))];
+  const signals = [AbortSignal.timeout(Math.min(ctx.toolset.executor.timeoutMs(bound), remaining))];
   if (ctx.signal) signals.push(ctx.signal);
   const restored = restoreClientJson(ctx.principal.trace, args);
   const started = Date.now();

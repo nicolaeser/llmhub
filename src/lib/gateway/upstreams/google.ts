@@ -37,6 +37,8 @@ const EMPTY_USER_TURN: JsonMap = { role: "user", parts: [{ text: "" }] };
 const IMAGEN_MODEL = /^imagen-/i;
 export const VERTEX_EMBEDDING_MODEL = /^(?:gemini-embedding-|text-embedding-|text-multilingual-embedding-)/i;
 const GEMINI_EMBEDDING_MODEL = /^gemini-embedding-/i;
+const EMBED_CONTENT_MODEL = /^gemini-embedding-[1-9]/i;
+const EMBED_CONTENT_LOCATIONS = new Set(["global", "us", "eu"]);
 const EMBEDDING_BATCH = 250;
 const EMBEDDING_TASKS = new Set([
   "RETRIEVAL_QUERY",
@@ -119,13 +121,27 @@ export function googlePath(kind: string, base: string, model: string, path: stri
   }
   if (embeddingPath(path)) {
     if (route.route !== "google" || !VERTEX_EMBEDDING_MODEL.test(route.model)) throw unsupportedEndpoint(kind);
-    return `${root}/publishers/google/models/${modelSegment(route.model)}:predict`;
+    if (!vertexEmbedContent(route.model)) return `${root}/publishers/google/models/${modelSegment(route.model)}:predict`;
+    requireEmbedContentLocation(root, route.model);
+    return `${root}/publishers/google/models/${modelSegment(route.model)}:embedContent`;
   }
   if (!chatPath(path)) throw unsupportedEndpoint(kind);
   if (route.route === "google") return `${root}/publishers/google/models/${modelSegment(route.model)}:${GEMINI_STREAM_ACTION}`;
   requireProject(root, "partner models");
   if (route.route === "anthropic") return `${root}/publishers/anthropic/models/${modelSegment(route.model)}:streamRawPredict`;
   return `${root}/endpoints/openapi/chat/completions`;
+}
+
+export function vertexEmbedContent(model: string): boolean {
+  return EMBED_CONTENT_MODEL.test(model);
+}
+
+function requireEmbedContentLocation(root: string, model: string): void {
+  const location = vertexTarget(root)?.location ?? "global";
+  if (EMBED_CONTENT_LOCATIONS.has(location)) return;
+  throw new GateError(400, "unsupported_parameter", `${model} on Vertex AI runs only in the global, us, or eu location`, {
+    param: "model",
+  });
 }
 
 function requireProject(root: string, what: string): void {
@@ -224,9 +240,28 @@ function vertexEmbeddingRequest(body: JsonMap): JsonMap {
   return { instances, parameters: { outputDimensionality: dimensions } };
 }
 
+function embeddingPredictions(json: unknown): unknown {
+  const rec = asRecord(json);
+  if (!rec || Array.isArray(rec.predictions) || !asRecord(rec.embedding)) return rec?.predictions;
+  const tokens = asNumber(asRecord(rec.usageMetadata)?.promptTokenCount, 0);
+  return [{ embeddings: { values: asRecord(rec.embedding)?.values, statistics: { token_count: tokens } } }];
+}
+
+function embedContentWire(payload: JsonMap): JsonMap {
+  const instance = asRecord(Array.isArray(payload.instances) ? payload.instances[0] : null) ?? {};
+  const config: JsonMap = {};
+  if (instance.task_type) config.taskType = instance.task_type;
+  if (instance.title) config.title = instance.title;
+  const dimensions = asRecord(payload.parameters)?.outputDimensionality;
+  if (dimensions !== undefined) config.outputDimensionality = dimensions;
+  const wire: JsonMap = { content: { parts: [{ text: asString(instance.content) }] } };
+  if (Object.keys(config).length) wire.embedContentConfig = config;
+  return wire;
+}
+
 export function requireVertexEmbeddingPredictions(kind: string, path: string, payload: JsonMap, json: unknown): unknown[] | null {
   if (kind !== "vertex" || !embeddingPath(path) || !Array.isArray(payload.instances)) return null;
-  const predictions = asRecord(json)?.predictions;
+  const predictions = embeddingPredictions(json);
   if (!Array.isArray(predictions) || predictions.length !== payload.instances.length) {
     throw new GateError(502, "upstream_error", "Vertex AI returned no embeddings");
   }
@@ -239,11 +274,9 @@ export function vertexEmbeddingChunks(kind: string, path: string, model: string,
   if (!Array.isArray(instances)) return null;
   const size = GEMINI_EMBEDDING_MODEL.test(googleModelRoute(kind, model).model) ? 1 : EMBEDDING_BATCH;
   if (instances.length <= size) return null;
-  const parameters = asRecord(payload.parameters);
   const chunks: JsonMap[] = [];
   for (let start = 0; start < instances.length; start += size) {
-    const slice = instances.slice(start, start + size);
-    chunks.push(parameters ? { instances: slice, parameters } : { instances: slice });
+    chunks.push({ ...payload, instances: instances.slice(start, start + size) });
   }
   return chunks;
 }
@@ -270,7 +303,7 @@ function float32Base64(values: number[]): string {
 }
 
 function vertexEmbeddingResponse(model: string, json: unknown, encodingFormat: string): JsonMap {
-  const predictions = asRecord(json)?.predictions;
+  const predictions = embeddingPredictions(json);
   if (!Array.isArray(predictions) || predictions.length === 0) {
     throw new GateError(502, "upstream_error", "Vertex AI returned no embeddings");
   }
@@ -439,7 +472,10 @@ export function googlePayload(kind: string, path: string, body: JsonMap): JsonMa
   return { ...body, model: route.model };
 }
 
-export function googleWire(kind: string, path: string, payload: JsonMap): JsonMap {
+export function googleWire(kind: string, path: string, payload: JsonMap, model = asString(payload.model)): JsonMap {
+  if (kind === "vertex" && embeddingPath(path) && vertexEmbedContent(googleModelRoute(kind, model).model)) {
+    return embedContentWire(payload);
+  }
   if (!chatPath(path)) return payload;
   const route = googleModelRoute(kind, asString(payload.model)).route;
   if (route === "google") return asRecord(payload.request) ?? {};

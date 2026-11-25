@@ -1,6 +1,6 @@
 import "server-only";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
-import { geminiRoot, VERTEX_EMBEDDING_MODEL } from "@/lib/gateway/upstreams/google";
+import { geminiRoot, googlePath, VERTEX_EMBEDDING_MODEL, vertexEmbedContent } from "@/lib/gateway/upstreams/google";
 import { VERTEX_API_VERSION, VERTEX_LIST_VERSION, vertexTarget } from "@/lib/gateway/upstreams/vertex-target";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
@@ -20,6 +20,16 @@ const VERTEX_CLAUDE = /^claude-/i;
 const CLAUDE_VERSION = /^[0-9]{8}$/;
 const KEY_PROBE_MODEL = "gemini-2.5-flash";
 const REJECTED_KEY_STATUSES = new Set([400, 401, 403]);
+const EMBEDDING_PROBE_TEXT = "ping";
+const EMBEDDING_PROBE_TIMEOUT_MS = 10_000;
+const REJECTED_PROBE_STATUSES = new Set([400, 401, 403, 404]);
+
+export const VERTEX_EMBEDDING_MODELS: readonly { id: string; name: string; context: number }[] = [
+  { id: "gemini-embedding-001", name: "Gemini Embedding 001", context: 2048 },
+  { id: "gemini-embedding-2", name: "Gemini Embedding 2", context: 8192 },
+  { id: "text-embedding-005", name: "Text Embedding 005", context: 2048 },
+  { id: "text-multilingual-embedding-002", name: "Text Multilingual Embedding 002", context: 2048 },
+];
 
 export const VERTEX_EXPRESS_MODELS: readonly { id: string; name: string }[] = [
   { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro" },
@@ -150,8 +160,64 @@ async function fetchExpressModels(baseUrl: string, headers: Record<string, strin
   return expressModels();
 }
 
-export async function fetchVertexModels(baseUrl: string, auth: UpstreamAuth): Promise<DiscoveredModel[]> {
+type ProbeOutcome = "served" | "rejected" | "unknown";
+
+function embeddingProbeUrl(baseUrl: string, model: string): string | null {
+  try {
+    return googlePath("vertex", baseUrl, model, "/embeddings");
+  } catch {
+    return null;
+  }
+}
+
+function embeddingProbeBody(model: string): string {
+  if (vertexEmbedContent(model)) return JSON.stringify({ content: { parts: [{ text: EMBEDDING_PROBE_TEXT }] } });
+  return JSON.stringify({ instances: [{ content: EMBEDDING_PROBE_TEXT }] });
+}
+
+async function probeEmbedding(baseUrl: string, model: string, headers: Record<string, string>): Promise<ProbeOutcome> {
+  const url = embeddingProbeUrl(baseUrl, model);
+  if (!url) return "rejected";
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: embeddingProbeBody(model),
+    signal: AbortSignal.timeout(EMBEDDING_PROBE_TIMEOUT_MS),
+  }).catch((err: unknown) => {
+    logger.info("provider.vertex_embedding_probe_failed", { model, ...errorFields(err) });
+    return null;
+  });
+  if (!res) return "unknown";
+  await res.body?.cancel().catch(() => undefined);
+  if (res.ok) return "served";
+  return REJECTED_PROBE_STATUSES.has(res.status) ? "rejected" : "unknown";
+}
+
+async function withEmbeddingModels(
+  baseUrl: string,
+  headers: Record<string, string>,
+  listed: DiscoveredModel[],
+  previous: ReadonlySet<string>,
+): Promise<DiscoveredModel[]> {
+  const known = new Set(listed.map((model) => model.id));
+  const missing = VERTEX_EMBEDDING_MODELS.filter((model) => !known.has(model.id));
+  const outcomes = await Promise.all(missing.map((model) => probeEmbedding(baseUrl, model.id, headers)));
+  const probed = missing
+    .filter((model, index) => outcomes[index] === "served" || (outcomes[index] === "unknown" && previous.has(model.id)))
+    .map((model) => discovered(model.id, model.name, "google", model.context));
+  return [...listed, ...probed];
+}
+
+export async function fetchVertexModels(
+  baseUrl: string,
+  auth: UpstreamAuth,
+  previous: ReadonlySet<string> = new Set(),
+): Promise<DiscoveredModel[]> {
   const headers = authHeaders(auth);
+  return withEmbeddingModels(baseUrl, headers, await vertexListing(baseUrl, headers), previous);
+}
+
+async function vertexListing(baseUrl: string, headers: Record<string, string>): Promise<DiscoveredModel[]> {
   if (!vertexTarget(baseUrl)) return fetchExpressModels(baseUrl, headers);
   const gemini = await listPages((token) => vertexListUrl(baseUrl, "google", token), headers, (json) => vertexModels(json, "google"));
   const claude = await listPages(

@@ -312,9 +312,8 @@
   "media": {
     "title": "{mode, select, edit {{name} bearbeiten} other {Medien-Tools hinzufügen}}",
     "description": "Gibt Chat-Modellen Tools, die mit Modellen dieses Gateways Medien erzeugen und lesen. Wähle für jedes gewünschte Tool ein Modell; Tools ohne Modell werden nicht angeboten. Ergebnisse werden als Dateien gespeichert und als Links zurückgegeben, die sich 7 Tage lang ohne API-Key öffnen lassen.",
-    "mediaModel": "Medienmodell",
-    "global": "Allen anbieten",
-    "globalHint": "Wenn aus, weise den Server unter „Wer ihn nutzen darf“ Unternehmen, Abteilungen oder API-Keys zu.",
+    "fits": "{kind, select, image {Erzeugt Bilder} speech {Liest Text vor} video {Erzeugt Videos} other {Transkribiert Audio}}",
+    "everyone": "{count, plural, =0 {Ohne Regel unter „Wer ihn nutzen darf“ bekommt niemand diese Tools.} other {Alle bekommen {tools}. Regeln unter „Wer ihn nutzen darf“ können das einschränken oder mehr freigeben.}}",
     "badge": "Medien",
     "model": "{kind, select, image {Bildmodell} speech {Sprachmodell} video {Videomodell} other {Transkriptionsmodell}}",
     "modelHint": "{kind, select, image {Beantwortet generate_image.} speech {Beantwortet text_to_speech.} video {Beantwortet generate_video und get_video.} other {Beantwortet transcribe_audio.}} Aufrufer brauchen Zugriff auf das Modell; Nutzung und Budgets zählen für den Aufrufer.",

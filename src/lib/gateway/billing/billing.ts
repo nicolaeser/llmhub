@@ -12,7 +12,7 @@ import { requestLabels } from "@/lib/gateway/billing/label-keys";
 import { CLIENT_CLOSED_STATUS, GateError } from "@/lib/gateway/errors";
 import { applyMarkup, markupRuleOf, pickMarkup, scaleByMarkup } from "@/lib/gateway/billing/markup-policy";
 import { tighterCap } from "@/lib/gateway/billing/cost-cap";
-import { tokenCount } from "@/lib/gateway/billing/tokens";
+import { embeddingInputTokens, tokenCount } from "@/lib/gateway/billing/tokens";
 import { markUsed } from "@/lib/gateway/billing/last-used";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
@@ -469,6 +469,14 @@ function label(value: unknown): string | undefined {
 function reportedCost(rec: Record<string, unknown>): number | undefined {
   if (typeof rec.cost !== "number" || !Number.isFinite(rec.cost) || rec.cost < 0) return undefined;
   return rec.cost + detail(rec, "cost_details", "upstream_inference_cost");
+}
+
+export function embeddingTokenUsage(json: unknown, input: unknown): Partial<TokenUsage> {
+  const rec = json && typeof json === "object" ? (json as Record<string, unknown>) : {};
+  const usage = usageFromUnknown(rec.usage, json);
+  if (usage.prompt_tokens) return usage;
+  const prompt = embeddingInputTokens(input);
+  return { ...usage, prompt_tokens: prompt, completion_tokens: 0, total_tokens: prompt };
 }
 
 export function usageFromUnknown(value: unknown, envelope?: unknown): Partial<TokenUsage> {

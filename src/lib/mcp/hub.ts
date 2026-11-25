@@ -1,6 +1,5 @@
 import "server-only";
 import { logger } from "@/lib/logging/logger";
-import { MCP_REQUEST_TIMEOUT_MS } from "@/lib/mcp/client";
 import { INVALID_PARAMS, McpEndpointError, type McpEndpointTools } from "@/lib/mcp/endpoint";
 import { mcpErrorCode } from "@/lib/mcp/errors";
 import { chainOf } from "@/lib/mcp/resolve";
@@ -46,7 +45,7 @@ export function hubMcpTools(principal: Principal): McpEndpointTools {
       const started = Date.now();
       const trace = { serverId: bound.serverId, tool: bound.tool.name };
       try {
-        const outcome = await executor.call(bound, args, AbortSignal.any([signal, AbortSignal.timeout(MCP_REQUEST_TIMEOUT_MS)]));
+        const outcome = await executor.call(bound, args, AbortSignal.any([signal, AbortSignal.timeout(executor.timeoutMs(bound))]));
         logger.info("mcp.tool_call", { ...trace, ms: Date.now() - started, ok: !outcome.isError });
         return { content: [{ type: "text", text: outcome.text }], isError: outcome.isError };
       } catch (err) {

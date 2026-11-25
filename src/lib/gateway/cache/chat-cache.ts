@@ -1,5 +1,5 @@
 import "server-only";
-import { recordUsage, recordUsageOrLog, usageFromUnknown } from "@/lib/gateway/billing/billing";
+import { embeddingTokenUsage, recordUsage, recordUsageOrLog } from "@/lib/gateway/billing/billing";
 import { cacheGet, cacheKey, cachePut, semanticAdd, semanticFind, semanticProbe, unitVector } from "@/lib/gateway/cache/response-cache";
 import { asRecord, ownerId } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
@@ -58,7 +58,7 @@ async function embedPrompt(principal: Principal, model: string, text: string, ta
     model,
     deployment: hit.dep,
     group: hit.group,
-    usage: usageFromUnknown(asRecord(hit.json)?.usage, hit.json),
+    usage: embeddingTokenUsage(hit.json, body.input),
     status: hit.status,
     outcome: "ok",
     latencyMs: Date.now() - started,

@@ -312,9 +312,8 @@
   "media": {
     "title": "{mode, select, edit {Edit {name}} other {Add media tools}}",
     "description": "Gives chat models tools that create and read media with models on this gateway. Pick a model for each tool you want; tools without a model are not offered. Results are stored as files and returned as links that open without an API key for 7 days.",
-    "mediaModel": "Media model",
-    "global": "Offer to everyone",
-    "globalHint": "When off, assign the server to companies, departments, or API keys under Who can use it.",
+    "fits": "{kind, select, image {Makes images} speech {Reads text aloud} video {Makes videos} other {Transcribes audio}}",
+    "everyone": "{count, plural, =0 {Without a rule under Who can use it, nobody gets these tools.} other {Everyone gets {tools}. Rules under Who can use it can narrow this or grant more.}}",
     "badge": "Media",
     "model": "{kind, select, image {Image model} speech {Speech model} video {Video model} other {Transcription model}}",
     "modelHint": "{kind, select, image {Answers generate_image.} speech {Answers text_to_speech.} video {Answers generate_video and get_video.} other {Answers transcribe_audio.}} Callers need access to the model; usage and budgets count for the caller.",

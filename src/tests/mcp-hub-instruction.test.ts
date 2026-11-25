@@ -25,7 +25,7 @@ const tools = bindTools(
 const toolset: McpToolset = {
   tools,
   byName: new Map(tools.map((bound) => [bound.name, bound])),
-  executor: { call: async () => ({ text: "", isError: false }), close: async () => undefined },
+  executor: { call: async () => ({ text: "", isError: false }), timeoutMs: () => 30_000, close: async () => undefined },
 };
 
 const instruction = hubToolsInstruction(toolset);

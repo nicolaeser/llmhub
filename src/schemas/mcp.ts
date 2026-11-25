@@ -226,7 +226,7 @@ export const mediaServerSchema = z
     videoModel: mediaModel,
     transcriptionModel: mediaModel,
     enabled: z.boolean().default(true),
-    global: z.boolean().default(false),
+    defaultAccess: z.enum(MCP_ACCESS_LEVELS).default("none"),
   })
   .strict()
   .refine((input) => Boolean(input.imageModel || input.speechModel || input.videoModel || input.transcriptionModel));
