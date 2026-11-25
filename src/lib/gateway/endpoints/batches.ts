@@ -20,7 +20,7 @@ import {
   parseBatchInput,
   resultLine,
 } from "@/lib/gateway/protocols/batch-format";
-import { assertBudget, usageFromUnknown } from "@/lib/gateway/billing/billing";
+import { assertBudget, embeddingTokenUsage, usageFromUnknown } from "@/lib/gateway/billing/billing";
 import { capRequestCost } from "@/lib/gateway/billing/cost-cap";
 import { dispatchChat } from "@/lib/gateway/dispatch/chat";
 import { asRecord, asStringMap, newId, ownerId } from "@/lib/gateway/core";
@@ -223,7 +223,8 @@ async function forwardLine(principal: Principal, model: string, path: string, bo
   const usage = meter(principal, model, body);
   try {
     const hit = await forwardToModel(aliases, principal, path, body);
-    await usage.ok(hit, usageFromUnknown(asRecord(hit.json)?.usage, hit.json));
+    const booked = path === "/embeddings" ? embeddingTokenUsage(hit.json, body.input) : usageFromUnknown(asRecord(hit.json)?.usage, hit.json);
+    await usage.ok(hit, booked);
     return asRecord(hit.json) ?? {};
   } catch (err) {
     await usage.fail(err);

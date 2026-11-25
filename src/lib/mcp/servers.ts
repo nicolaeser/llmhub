@@ -6,7 +6,7 @@ import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { AuthError, isPrismaCode } from "@/lib/auth/errors";
 import { writeAudit } from "@/lib/audit";
 import { seal } from "@/lib/crypto";
-import { replaceCompanyMcpAssignments, replaceMcpAssignments, targetOptions } from "@/lib/mcp/assignments";
+import { defaultAccessData, replaceCompanyMcpAssignments, replaceMcpAssignments, targetOptions } from "@/lib/mcp/assignments";
 import { builderModels } from "@/lib/mcp/builder";
 import { managesMcpRules, mcpAccess, requireMcpManager, seesMcp, visibleToCompany } from "@/lib/mcp/scope";
 import { saveMcpInstallation } from "@/lib/mcp/catalog";
@@ -16,8 +16,8 @@ import { assertUrl, connectionFields, parse, secretFor, secretRequired } from "@
 import { probe, storeProbe } from "@/lib/mcp/server-probe";
 import { auditShape, loadRow, scopedView, serverSelect, viewOf, type ServerRow } from "@/lib/mcp/server-view";
 import { serverRecord } from "@/lib/mcp/toolset";
-import { MEDIA_SERVER_URL, mediaToolSpecs } from "@/lib/mcp/media";
-import { enabledModelChoices } from "@/lib/models/aliases";
+import { MEDIA_SERVER_URL, mediaKindsOf, mediaToolSpecs } from "@/lib/mcp/media";
+import { routePool } from "@/lib/gateway/routing/route-pool";
 import { rebaseTools } from "@/lib/mcp/base-url";
 import { defaultAccessOf } from "@/lib/mcp/resolve";
 import { BUILDER_MODEL_KEY, authUsesName, hostedServerSchema, mcpAssignmentsSchema, mcpServerInputSchema, mediaServerSchema } from "@/schemas/mcp";
@@ -186,10 +186,22 @@ export async function createHostedMcpServer(raw: unknown) {
 }
 
 async function mediaModelChoices(): Promise<McpMediaModel[]> {
-  const choices = (await enabledModelChoices()).filter((choice) => choice.pools.includes("api"));
-  return choices
-    .map((choice) => ({ alias: choice.alias, label: choice.label, media: choice.role === "media" }))
-    .sort((a, b) => Number(b.media) - Number(a.media) || a.alias.localeCompare(b.alias));
+  const groups = await prisma.modelGroup.findMany({
+    where: { enabled: true },
+    select: {
+      alias: true,
+      displayName: true,
+      deployments: { select: { kind: true, model: true, provider: { select: { kind: true, internal: true } } } },
+    },
+    orderBy: { alias: "asc" },
+  });
+  return groups
+    .filter((group) => group.deployments.some((route) => routePool(route) === "api"))
+    .map((group) => ({
+      alias: group.alias,
+      label: group.displayName || group.alias,
+      kinds: mediaKindsOf([group.alias, group.displayName, ...group.deployments.map((route) => route.model)]),
+    }));
 }
 
 type MediaInput = { imageModel: string; speechModel: string; speechVoice: string; videoModel: string; transcriptionModel: string };
@@ -232,7 +244,7 @@ export async function createMediaMcpServer(raw: unknown) {
         kind: "media",
         internal: false,
         enabled: input.enabled,
-        global: input.global,
+        ...defaultAccessData(input.defaultAccess),
         ...mediaFields(spec),
       },
       select: serverSelect,
@@ -246,7 +258,7 @@ export async function createMediaMcpServer(raw: unknown) {
     action: "mcp_server.create",
     objectType: "mcp_server",
     objectId: created.id,
-    after: { ...auditShape(created), kind: "media", media: spec, global: input.global },
+    after: { ...auditShape(created), kind: "media", media: spec },
   });
   return { server: scopedView(await loadRow(created.id), session) };
 }
@@ -268,7 +280,7 @@ export async function updateMediaMcpServer(raw: { id: string } & Record<string, 
         name: input.name,
         description: input.description,
         enabled: input.enabled,
-        global: input.global,
+        ...defaultAccessData(input.defaultAccess),
         ...mediaFields(spec),
       },
       select: serverSelect,

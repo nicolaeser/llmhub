@@ -289,6 +289,11 @@ export default function CatalogFamily({ family, handlers }: { family: CatalogFam
                     {family.vendor}
                   </Chip>
                 ) : null}
+                {family.role === "chat" ? null : (
+                  <Chip size="sm" variant="soft">
+                    {t("role", { role: family.role })}
+                  </Chip>
+                )}
                 {tagged.map((variant) => (
                   <Chip key={variant.alias} size="sm" variant="soft" color="warning">
                     {t("tag", { tag: variant.tag })}

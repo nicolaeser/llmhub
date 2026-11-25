@@ -36,6 +36,13 @@ export function estimateTokens(text: string): number {
   return tokensForLength(text.length);
 }
 
+export function embeddingInputTokens(input: unknown): number {
+  if (typeof input === "string") return estimateTokens(input);
+  if (!Array.isArray(input)) return tokensForLength(promptLength(input));
+  if (input.length > 0 && input.every((item) => typeof item === "number")) return input.length;
+  return input.reduce((sum: number, item) => sum + embeddingInputTokens(item), 0);
+}
+
 export function requestText(body: JsonMap): string {
   if (typeof body.prompt === "string") return body.prompt;
   if (typeof body.input === "string") return body.input;

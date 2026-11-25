@@ -11,11 +11,18 @@ import { estimateTokens } from "@/lib/gateway/billing/tokens";
 import { asRecord, ownerId } from "@/lib/gateway/core";
 import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
 import { refreshVideo, storeVideo, videoRecord } from "@/lib/gateway/endpoints/videos";
-import { GateError } from "@/lib/gateway/errors";
+import { clientClosedError, GateError, isClientClosed } from "@/lib/gateway/errors";
 import { canReadObject, getObject, putObject } from "@/lib/gateway/storage/objects";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { McpError } from "@/lib/mcp/errors";
+import {
+  GENERATE_IMAGE_TOOL,
+  GENERATE_VIDEO_TOOL,
+  GET_VIDEO_TOOL,
+  TEXT_TO_SPEECH_TOOL,
+  TRANSCRIBE_AUDIO_TOOL,
+} from "@/lib/mcp/media-tools";
 import { guardedFetch } from "@/lib/mcp/transport";
 import { parseJsonOrNull } from "@/lib/utils/json";
 import { cancelQuietly } from "@/lib/utils/streams";
@@ -24,29 +31,44 @@ import type { McpFetch, McpMediaKind, McpMediaSpec, McpToolOutcome, McpToolSpec 
 
 export const MEDIA_SERVER_URL = "llmhub:media";
 export const MEDIA_KINDS = ["image", "speech", "video", "transcription"] as const satisfies readonly McpMediaKind[];
-export const GENERATE_IMAGE_TOOL = "generate_image";
-export const TEXT_TO_SPEECH_TOOL = "text_to_speech";
-export const GENERATE_VIDEO_TOOL = "generate_video";
-export const GET_VIDEO_TOOL = "get_video";
-export const TRANSCRIBE_AUDIO_TOOL = "transcribe_audio";
 export const MEDIA_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const MEDIA_TOOL_TIMEOUT_MS = 180_000;
 export const MAX_IMAGES_PER_CALL = 4;
 export const MAX_SPEECH_CHARS = 4096;
-export const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+export const MAX_REMOTE_BYTES = 25 * 1024 * 1024;
 export const IMAGE_SIZES = ["auto", "1024x1024", "1536x1024", "1024x1536"] as const;
 export const SPEECH_FORMATS = ["mp3", "wav", "opus", "aac", "flac"] as const;
 export const DEFAULT_VOICE = "alloy";
 
 const MEDIA_PURPOSE = "media";
 const MAX_PROMPT_CHARS = 8000;
-const AUDIO_FETCH_MS = 60_000;
+const REMOTE_FETCH_MS = 60_000;
 const IMAGE_TYPES: Record<string, string> = { png: "image/png", jpeg: "image/jpeg", jpg: "image/jpeg", webp: "image/webp" };
+const IMAGE_EXTENSIONS: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" };
 const AUDIO_TYPES: Record<string, string> = {
   mp3: "audio/mpeg",
   wav: "audio/wav",
   opus: "audio/ogg",
   aac: "audio/aac",
   flac: "audio/flac",
+};
+const TRANSCRIBABLE_EXTENSIONS = new Set(["flac", "mp3", "mp4", "mpeg", "mpga", "m4a", "ogg", "wav", "webm"]);
+const TRANSCRIBABLE_TYPES: Record<string, string> = {
+  "audio/mpeg": "mp3",
+  "audio/mp3": "mp3",
+  "audio/wav": "wav",
+  "audio/x-wav": "wav",
+  "audio/wave": "wav",
+  "audio/ogg": "ogg",
+  "audio/opus": "ogg",
+  "audio/webm": "webm",
+  "video/webm": "webm",
+  "audio/flac": "flac",
+  "audio/x-flac": "flac",
+  "audio/mp4": "m4a",
+  "audio/m4a": "m4a",
+  "audio/x-m4a": "m4a",
+  "video/mp4": "mp4",
 };
 const VIDEO_DONE = "completed";
 const VIDEO_EXTENSIONS: Record<string, string> = {
@@ -60,8 +82,12 @@ const VIDEO_EXTENSIONS: Record<string, string> = {
 const MEDIA_TYPE = /^(?:audio|video)\/[a-z0-9][a-z0-9.+-]{0,63}$/;
 const VIDEO_FAILED = new Set(["failed", "cancelled", "expired"]);
 const LINK_NOTE = "Links open without an API key and expire after 7 days.";
+const PII_SAFE_EXPIRY = /^[0-9a-z]{1,10}$/;
+const PII_SAFE_SIGNATURE = /^[0-9A-F]{64}$/;
+const DECIMAL_MS_EXPIRY = /^\d{1,16}$/;
+const BYTE_RANGE = /^bytes=(\d{0,15})-(\d{0,15})$/;
 
-type MediaContext = { spec: McpMediaSpec; args: JsonMap; principal: Principal; fetchAudio: McpFetch };
+type MediaContext = { spec: McpMediaSpec; args: JsonMap; principal: Principal; fetchRemote: McpFetch; signal: AbortSignal };
 
 class ToolInputError extends Error {}
 
@@ -159,6 +185,19 @@ const TRANSCRIBE_TOOL: McpToolSpec = {
   action: "read",
 };
 
+const KIND_PATTERNS: Record<McpMediaKind, RegExp> = {
+  image:
+    /dall-e|gpt-image|stable-diffusion|sdxl|seedream|ideogram|recraft|(?:^|[^a-z])(?:imagen|imagine|image|flux)(?:[^a-z]|$)/,
+  speech: /text-to-speech|(?:^|[^a-z])tts(?:[^a-z]|$)/,
+  video: /(?:^|[^a-z])(?:sora|veo|kling|video)(?:[^a-z]|$)/,
+  transcription: /whisper|transcri|speech-to-text|(?:^|[^a-z])stt(?:[^a-z]|$)/,
+};
+
+export function mediaKindsOf(names: readonly string[]): McpMediaKind[] {
+  const folded = names.map((name) => name.trim().toLowerCase()).filter(Boolean);
+  return MEDIA_KINDS.filter((kind) => folded.some((name) => KIND_PATTERNS[kind].test(name)));
+}
+
 export function mediaToolSpecs(spec: McpMediaSpec): McpToolSpec[] {
   return [
     ...(spec.image.model ? [IMAGE_TOOL] : []),
@@ -168,24 +207,55 @@ export function mediaToolSpecs(spec: McpMediaSpec): McpToolSpec[] {
   ];
 }
 
-function linkSignature(id: string, expires: number): string {
-  return createHmac("sha256", signingSecret()).update(`media-link:${id}:${expires}`).digest("base64url");
+function linkDigest(id: string, expires: string): Buffer {
+  return createHmac("sha256", signingSecret()).update(`media-link:${id}:${expires}`).digest();
+}
+
+function hexSignature(digest: Buffer): string {
+  return digest.toString("hex").toUpperCase();
 }
 
 export function mediaLink(id: string, now = Date.now()): string {
-  const expires = now + MEDIA_LINK_TTL_MS;
+  const expires = Math.floor((now + MEDIA_LINK_TTL_MS) / 1000).toString(36);
   const url = new URL(`/api/media/${encodeURIComponent(id)}`, env.NEXT_PUBLIC_APP_URL);
-  url.searchParams.set("expires", String(expires));
-  url.searchParams.set("signature", linkSignature(id, expires));
+  url.searchParams.set("expires", expires);
+  url.searchParams.set("signature", hexSignature(linkDigest(id, expires)));
   return url.toString();
 }
 
+type LinkScheme = { at: number; encode: (digest: Buffer) => string };
+
+function linkScheme(expires: string, signature: string): LinkScheme | null {
+  if (PII_SAFE_EXPIRY.test(expires) && PII_SAFE_SIGNATURE.test(signature)) {
+    return { at: parseInt(expires, 36) * 1000, encode: hexSignature };
+  }
+  if (DECIMAL_MS_EXPIRY.test(expires)) return { at: Number(expires), encode: (digest) => digest.toString("base64url") };
+  return null;
+}
+
 export function mediaLinkValid(id: string, expires: string | null, signature: string | null, now = Date.now()): boolean {
-  const at = Number(expires);
-  if (!expires || !signature || !Number.isSafeInteger(at) || at < now) return false;
-  const expected = Buffer.from(linkSignature(id, at));
+  if (!expires || !signature) return false;
+  const scheme = linkScheme(expires, signature);
+  if (!scheme || !Number.isSafeInteger(scheme.at) || scheme.at < now) return false;
+  const expected = Buffer.from(scheme.encode(linkDigest(id, expires)));
   const given = Buffer.from(signature);
   return expected.length === given.length && timingSafeEqual(expected, given);
+}
+
+export type MediaRange = { start: number; end: number };
+
+export function mediaRange(header: string | null, size: number): MediaRange | "unsatisfiable" | null {
+  const match = header ? BYTE_RANGE.exec(header.trim()) : null;
+  if (!match || (!match[1] && !match[2])) return null;
+  if (!match[1]) {
+    const suffix = Number(match[2]);
+    return suffix && size ? { start: Math.max(0, size - suffix), end: size - 1 } : "unsatisfiable";
+  }
+  const start = Number(match[1]);
+  const last = match[2] ? Number(match[2]) : size - 1;
+  if (match[2] && last < start) return null;
+  if (start >= size) return "unsatisfiable";
+  return { start, end: Math.min(last, size - 1) };
 }
 
 export function isMediaObject(meta: unknown, purpose: string): boolean {
@@ -292,7 +362,36 @@ function failure(message: string): McpToolOutcome {
   return { text: message, isError: true };
 }
 
-async function generateImage({ spec, args, principal }: MediaContext): Promise<McpToolOutcome> {
+function gateFailure(tool: string, kind: McpMediaKind, model: string, err: GateError): string {
+  if (err.code === "model_access_denied") {
+    return `${tool} failed: this API key may not use the ${kind} model ${model} (${err.message}). Ask an administrator for access to it.`;
+  }
+  return `${tool} failed with the ${kind} model ${model}: ${err.message}`;
+}
+
+function remoteSignal(caller: AbortSignal): AbortSignal {
+  return AbortSignal.any([AbortSignal.timeout(REMOTE_FETCH_MS), caller]);
+}
+
+async function keptImage(ctx: MediaContext, model: string, url: string, index: number): Promise<JsonMap | null> {
+  try {
+    const res = await ctx.fetchRemote(url, { method: "GET", headers: { accept: "image/*" }, signal: remoteSignal(ctx.signal) });
+    const contentType = (res.headers.get("content-type")?.split(";")[0] ?? "").trim().toLowerCase();
+    const extension = IMAGE_EXTENSIONS[contentType];
+    if (!res.ok || !extension) {
+      await cancelQuietly(res.body);
+      return null;
+    }
+    const payload = await readLimited(res, "image");
+    return await storeMedia(ctx.principal, model, { filename: `image-${index + 1}.${extension}`, contentType, payload });
+  } catch (err) {
+    logger.warn("mcp.media_image_kept_link", { ...(err instanceof McpError ? { code: err.code } : errorFields(err)) });
+    return null;
+  }
+}
+
+async function generateImage(ctx: MediaContext): Promise<McpToolOutcome> {
+  const { spec, args, principal } = ctx;
   const model = spec.image.model;
   const body: JsonMap = { model, prompt: required(args, "prompt", MAX_PROMPT_CHARS) };
   const count = typeof args.count === "number" ? Math.trunc(args.count) : 1;
@@ -301,7 +400,9 @@ async function generateImage({ spec, args, principal }: MediaContext): Promise<M
     body.size = args.size;
   }
   const { aliases, clean } = await guardedRequest(model, principal, body);
-  const hit = await metered(principal, model, body, () => forwardToModel(aliases, principal, "/images/generations", clean));
+  const hit = await metered(principal, model, body, () =>
+    forwardToModel(aliases, principal, "/images/generations", clean, { signal: ctx.signal, timeoutMs: MEDIA_TOOL_TIMEOUT_MS }),
+  );
   const response = asRecord(hit.json) ?? {};
   const format = typeof response.output_format === "string" ? response.output_format.toLowerCase() : "png";
   const contentType = IMAGE_TYPES[format] ?? "image/png";
@@ -315,14 +416,14 @@ async function generateImage({ spec, args, principal }: MediaContext): Promise<M
       const file = { filename: `image-${index + 1}.${extension}`, contentType, payload: Buffer.from(item.b64_json, "base64") };
       images.push({ ...(await storeMedia(principal, model, file)), ...revised });
     } else if (typeof item.url === "string" && item.url) {
-      images.push({ url: item.url, ...revised });
+      images.push({ ...((await keptImage(ctx, model, item.url, index)) ?? { url: item.url }), ...revised });
     }
   }
   if (!images.length) return failure("The image model returned no images.");
   return success({ images, note: `Show each url to the user as a Markdown image. ${LINK_NOTE}` });
 }
 
-async function textToSpeech({ spec, args, principal }: MediaContext): Promise<McpToolOutcome> {
+async function textToSpeech({ spec, args, principal, signal }: MediaContext): Promise<McpToolOutcome> {
   const model = spec.speech.model;
   const input = required(args, "text", MAX_SPEECH_CHARS);
   const format = (SPEECH_FORMATS as readonly string[]).includes(String(args.format)) ? String(args.format) : "mp3";
@@ -334,7 +435,7 @@ async function textToSpeech({ spec, args, principal }: MediaContext): Promise<Mc
     principal,
     model,
     body,
-    () => forwardToModel(aliases, principal, "/audio/speech", clean, { binary: true }),
+    () => forwardToModel(aliases, principal, "/audio/speech", clean, { binary: true, signal, timeoutMs: MEDIA_TOOL_TIMEOUT_MS }),
     () => ({ prompt_tokens: estimateTokens(typeof clean.input === "string" ? clean.input : input) }),
   );
   const contentType = mediaType(hit.contentType, "audio/", AUDIO_TYPES[format]!);
@@ -346,12 +447,12 @@ function videoView(json: JsonMap, id: string): JsonMap {
   const status = typeof json.status === "string" ? json.status : "unknown";
   const view: JsonMap = { video_id: id, status };
   if (typeof json.progress === "number") view.progress = json.progress;
-  const error = asRecord(json.error);
-  if (typeof error?.message === "string") view.error = error.message;
+  const error = typeof json.error === "string" ? json.error : asRecord(json.error)?.message;
+  if (typeof error === "string" && error) view.error = error;
   return view;
 }
 
-async function generateVideo({ spec, args, principal }: MediaContext): Promise<McpToolOutcome> {
+async function generateVideo({ spec, args, principal, signal }: MediaContext): Promise<McpToolOutcome> {
   const model = spec.video.model;
   const body: JsonMap = { model, prompt: required(args, "prompt", MAX_PROMPT_CHARS) };
   const seconds = text(args, "seconds", 8);
@@ -359,7 +460,8 @@ async function generateVideo({ spec, args, principal }: MediaContext): Promise<M
   if (seconds) body.seconds = seconds;
   if (size) body.size = size;
   const { aliases, clean } = await guardedRequest(model, principal, body);
-  const hit = await metered(principal, model, body, () => forwardToModel(aliases, principal, "/videos", clean));
+  if (signal.aborted) throw clientClosedError();
+  const hit = await metered(principal, model, body, () => forwardToModel(aliases, principal, "/videos", clean, { timeoutMs: MEDIA_TOOL_TIMEOUT_MS }));
   const stored = await storeVideo(principal, model, hit.json);
   return success({
     ...videoView(stored, String(stored.id)),
@@ -389,11 +491,12 @@ async function getVideo({ args, principal }: MediaContext): Promise<McpToolOutco
   return success({ ...videoView(json, id), video, note: `Give the url to the user as a link. ${LINK_NOTE}` });
 }
 
-async function readLimited(res: Response): Promise<Uint8Array> {
+async function readLimited(res: Response, label: "audio" | "image"): Promise<Uint8Array> {
+  const tooLarge = `The ${label} file is larger than 25 MB.`;
   const declared = Number(res.headers.get("content-length") ?? 0);
-  if (declared > MAX_AUDIO_BYTES) {
+  if (declared > MAX_REMOTE_BYTES) {
     await cancelQuietly(res.body);
-    throw new ToolInputError("The audio file is larger than 25 MB.");
+    throw new ToolInputError(tooLarge);
   }
   const reader = res.body?.getReader();
   if (!reader) return new Uint8Array();
@@ -403,9 +506,9 @@ async function readLimited(res: Response): Promise<Uint8Array> {
     const { done, value } = await reader.read();
     if (done) break;
     size += value.byteLength;
-    if (size > MAX_AUDIO_BYTES) {
+    if (size > MAX_REMOTE_BYTES) {
       await cancelQuietly(reader);
-      throw new ToolInputError("The audio file is larger than 25 MB.");
+      throw new ToolInputError(tooLarge);
     }
     parts.push(value);
   }
@@ -413,7 +516,7 @@ async function readLimited(res: Response): Promise<Uint8Array> {
 }
 
 function storedAudio(object: StoredObjectRecord): { payload: Uint8Array; filename: string; contentType: string } {
-  if (object.bytes > MAX_AUDIO_BYTES) throw new ToolInputError("The audio file is larger than 25 MB.");
+  if (object.bytes > MAX_REMOTE_BYTES) throw new ToolInputError("The audio file is larger than 25 MB.");
   return { payload: object.payload, filename: object.filename || "audio", contentType: object.contentType || "application/octet-stream" };
 }
 
@@ -435,7 +538,7 @@ async function audioSource(ctx: MediaContext): Promise<{ payload: Uint8Array; fi
   if (!url) throw new ToolInputError("Pass url or file_id.");
   let res: Response;
   try {
-    res = await ctx.fetchAudio(url, { method: "GET", headers: { accept: "audio/*" }, signal: AbortSignal.timeout(AUDIO_FETCH_MS) });
+    res = await ctx.fetchRemote(url, { method: "GET", headers: { accept: "audio/*" }, signal: remoteSignal(ctx.signal) });
   } catch (err) {
     if (err instanceof McpError) throw new ToolInputError("This url cannot be fetched. Use a public https url.", { cause: err });
     throw err;
@@ -445,7 +548,14 @@ async function audioSource(ctx: MediaContext): Promise<{ payload: Uint8Array; fi
     throw new ToolInputError(`Fetching the audio failed with status ${res.status}.`);
   }
   const name = new URL(url).pathname.split("/").pop() || "audio";
-  return { payload: await readLimited(res), filename: name, contentType: res.headers.get("content-type") ?? "application/octet-stream" };
+  return { payload: await readLimited(res, "audio"), filename: name, contentType: res.headers.get("content-type") ?? "application/octet-stream" };
+}
+
+export function audioFilename(name: string, contentType: string): string {
+  const extension = /\.([a-z0-9]+)$/i.exec(name)?.[1]?.toLowerCase() ?? "";
+  if (TRANSCRIBABLE_EXTENSIONS.has(extension)) return name;
+  const derived = TRANSCRIBABLE_TYPES[(contentType.split(";")[0] ?? "").trim().toLowerCase()];
+  return derived ? `${name.replace(/\.[a-z0-9]*$/i, "") || "audio"}.${derived}` : name;
 }
 
 async function transcribeAudio(ctx: MediaContext): Promise<McpToolOutcome> {
@@ -456,7 +566,7 @@ async function transcribeAudio(ctx: MediaContext): Promise<McpToolOutcome> {
   const audio = await audioSource(ctx);
   const form = new FormData();
   form.set("model", model);
-  form.set("file", new Blob([Buffer.from(audio.payload)], { type: audio.contentType }), audio.filename);
+  form.set("file", new Blob([Buffer.from(audio.payload)], { type: audio.contentType }), audioFilename(audio.filename, audio.contentType));
   if (language) form.set("language", language);
   const body: JsonMap = { model, ...(language ? { language } : {}) };
   const aliases = modelChain(principal, model, {});
@@ -465,7 +575,12 @@ async function transcribeAudio(ctx: MediaContext): Promise<McpToolOutcome> {
     model,
     body,
     async () => {
-      const raw = await forwardToModel(aliases, principal, "/audio/transcriptions", null, { rawBody: form, binary: true });
+      const raw = await forwardToModel(aliases, principal, "/audio/transcriptions", null, {
+        rawBody: form,
+        binary: true,
+        signal: ctx.signal,
+        timeoutMs: MEDIA_TOOL_TIMEOUT_MS,
+      });
       const transcript = new TextDecoder().decode(raw.raw);
       return { ...raw, json: parseJsonOrNull(transcript), transcript };
     },
@@ -500,16 +615,19 @@ export async function callMedia(
   tool: string,
   args: JsonMap,
   principal: Principal | null,
-  fetchAudio: McpFetch = guardedFetch(false),
+  fetchRemote: McpFetch = guardedFetch(false),
+  signal: AbortSignal = AbortSignal.timeout(MEDIA_TOOL_TIMEOUT_MS),
 ): Promise<McpToolOutcome> {
   if (!principal) return failure("This tool needs a signed-in caller.");
   const handler = HANDLERS[tool];
   if (!handler || !spec[handler.kind].model) return failure(`Unknown tool ${tool}.`);
   try {
-    return await handler.run({ spec, args, principal: await mediaPrincipal(principal, handler.endpoint), fetchAudio });
+    if (signal.aborted) throw clientClosedError();
+    return await handler.run({ spec, args, principal: await mediaPrincipal(principal, handler.endpoint), fetchRemote, signal });
   } catch (err) {
     if (err instanceof ToolInputError) return failure(err.message);
-    if (err instanceof GateError) return failure(`${tool} failed: ${err.message}`);
+    if (isClientClosed(err) || (signal.aborted && !(err instanceof GateError))) return failure(`${tool} stopped because the request ended or ran out of time.`);
+    if (err instanceof GateError) return failure(gateFailure(tool, handler.kind, spec[handler.kind].model, err));
     logger.warn("mcp.media_failed", { tool, ...errorFields(err) });
     return failure(`${tool} failed.`);
   }

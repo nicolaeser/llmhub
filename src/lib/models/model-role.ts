@@ -11,7 +11,10 @@ export type ModelChoice = {
 const SPECIALTY: { role: Exclude<ModelRole, "chat">; pattern: RegExp }[] = [
   { role: "rerank", pattern: /rerank|ranker/ },
   { role: "ocr", pattern: /(?:^|[^a-z])ocr(?:[^a-z]|$)/ },
-  { role: "embedding", pattern: /embed|(?:^|[^a-z])(?:bge|gte|e5)(?:[-_]|$)|(?:^|[^a-z])(?:voyage|nomic)(?:[^a-z]|$)/ },
+  {
+    role: "embedding",
+    pattern: /embed|minilm|mpnet|sentence-transformers|(?:^|[^a-z])(?:bge|gte|e5)(?:[-_]|$)|(?:^|[^a-z])(?:voyage|nomic)(?:[^a-z]|$)/,
+  },
   {
     role: "media",
     pattern:

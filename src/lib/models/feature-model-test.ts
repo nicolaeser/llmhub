@@ -4,7 +4,7 @@ import { requirePlatformPermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { toGateError } from "@/lib/gateway/access/gate";
 import { systemPrincipal } from "@/lib/gateway/access/system-principal";
-import { usageFromUnknown } from "@/lib/gateway/billing/billing";
+import { embeddingTokenUsage, usageFromUnknown } from "@/lib/gateway/billing/billing";
 import { meter } from "@/lib/gateway/billing/meter";
 import { jevRequest } from "@/lib/gateway/catalog/jev";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
@@ -49,7 +49,11 @@ const PROBES: Record<FeatureModelRole, (model: string) => Probe> = {
     usage: tokenUsage,
   }),
   jev: (model) => ({ path: "/systemone", body: jevRequest(PROBE_TASK, model), usage: tokenUsage }),
-  embedding: (model) => ({ path: "/embeddings", body: { model, input: PROBE_TEXT }, usage: tokenUsage }),
+  embedding: (model) => ({
+    path: "/embeddings",
+    body: { model, input: PROBE_TEXT },
+    usage: (json) => embeddingTokenUsage(json, PROBE_TEXT),
+  }),
   ocr: (model) => ({
     path: "/ocr",
     body: { model, document: { type: "image_url", image_url: PROBE_IMAGE } },
