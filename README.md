@@ -328,7 +328,7 @@ Subscription accounts (Claude, ChatGPT/Codex, Kimi, SuperGrok, Antigravity, and 
 
 Session affinity keeps every conversation on the same deployment of a model. Turn it on for a model group whose deployments are several replicas of one self-hosted model (vLLM, SGLang, llama.cpp, TGI).
 
-**Why.** Each replica keeps a prefix cache (KV cache) of the prompts it has seen. Coding agents such as Claude Code, opencode, Cline, and Aider send the whole conversation again with every step, often 20,000 to 200,000 tokens, and it only grows. When a step lands on the replica that served the step before, that replica reuses its cache and only reads the new part. On another replica, the whole conversation is read again from the start. That slows the request and every other request on that replica. In a test with two GPUs and one vLLM replica each, a follow-up step at 78,000 tokens took about 50 seconds on the other replica and about 3 seconds on the same one, and four agents at once generated code at 94 instead of 59 tokens per second.
+**Why.** Each replica keeps a prefix cache (KV cache) of the prompts it has seen. Coding agents such as Claude Code, opencode, Cline, and Aider send the whole conversation again with every step, often 20,000 to 200,000 tokens, and it only grows. When a step lands on the replica that served the step before, that replica reuses its cache and only reads the new part. On another replica, the whole conversation is read again from the start. That slows the request and every other request on that replica. With long conversations, a step on the same replica can start in seconds where another replica first has to read the whole conversation again, and the time other requests wait for the replica drops too.
 
 A load balancer in front of the replicas (Caddy, nginx, a Kubernetes service) can't do this. All requests come from LLM Hub without cookies, so it can't tell conversations apart. LLM Hub can.
 
@@ -366,10 +366,10 @@ Retries, fallbacks, and overflow models work as before. A deployment that alread
 
 ### Set it up
 
-Example: one model, `Qwen3.8-27B`, runs on two GPUs, with one vLLM replica each, reachable at `http://<host>/gpu0/v1` and `http://<host>/gpu1/v1` with the same API key.
+Example: one model, `my-model`, runs as two replicas of an OpenAI-compatible inference server, reachable at `http://<replica-a>/v1` and `http://<replica-b>/v1` with the same API key.
 
-1. On the **Providers** page, connect two OpenAI-compatible providers: `replica-gpu0` with the base URL `http://<host>/gpu0/v1` and `replica-gpu1` with `http://<host>/gpu1/v1`, both with the API key of the replicas. Each provider gets its own concurrency limit.
-2. On the **Models** page, create the model `Qwen3.8-27B` with the load-balance mode **Least busy**, add one endpoint per provider with the upstream model `Qwen3.8-27B`, and turn on **Session affinity**.
+1. On the **Providers** page, connect two OpenAI-compatible providers: `replica-a` with the base URL `http://<replica-a>/v1` and `replica-b` with `http://<replica-b>/v1`, both with the API key of the replicas. Each provider gets its own concurrency limit.
+2. On the **Models** page, create the model `my-model` with the load-balance mode **Least busy**, add one endpoint per provider with the upstream model `my-model`, and turn on **Session affinity**.
 
 With the management API:
 
@@ -378,19 +378,19 @@ curl https://hub.example.com/api/mgmt/models \
   -H "Authorization: Bearer $LLMHUB_MGMT_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "alias": "Qwen3.8-27B",
+    "alias": "my-model",
     "strategy": "least_inflight",
     "session_affinity": true,
     "deployments": [
-      {"provider_id": "<replica-gpu0 provider id>", "model": "Qwen3.8-27B"},
-      {"provider_id": "<replica-gpu1 provider id>", "model": "Qwen3.8-27B"}
+      {"provider_id": "<replica-a provider id>", "model": "my-model"},
+      {"provider_id": "<replica-b provider id>", "model": "my-model"}
     ]
   }'
 ```
 
 For an existing model, send `PATCH /api/mgmt/models/<alias>` with `{"session_affinity": true}`. `GET /api/mgmt/models` shows the setting as `session_affinity`.
 
-The result: each agent conversation stays on its GPU, new conversations go to the less busy GPU, and when one GPU fails, the other takes over its conversations.
+The result: each agent conversation stays on its replica, new conversations go to the less busy replica, and when one replica fails, the other takes over its conversations.
 
 ### Check that it works
 
