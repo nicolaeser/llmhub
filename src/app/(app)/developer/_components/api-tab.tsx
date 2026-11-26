@@ -80,7 +80,8 @@ export default function ApiTab() {
         p.method.toLowerCase().includes(q) ||
         p.path.toLowerCase().includes(q) ||
         p.summary.toLowerCase().includes(q) ||
-        p.style.includes(q),
+        p.style.includes(q) ||
+        (p.headers ?? []).some((header) => header.name.includes(q)),
     );
   }, [paths, query]);
 
@@ -127,6 +128,23 @@ export default function ApiTab() {
       <Chip size="sm" variant="soft" color={row.style === "management" ? "accent" : "default"}>
         {t("style", { style: row.style })}
       </Chip>
+    );
+  }
+
+  function headerList(row: OpenApiPath) {
+    if (!row.headers?.length) return null;
+    return (
+      <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
+        {row.headers.map((header) => (
+          <span key={header.name}>
+            {t.rich("header", {
+              direction: header.direction,
+              name: header.name,
+              code: (chunks) => <code className="font-mono">{chunks}</code>,
+            })}
+          </span>
+        ))}
+      </span>
     );
   }
 
@@ -219,7 +237,10 @@ export default function ApiTab() {
       </Card>
 
       <section className="space-y-3">
-        <h2 className="text-base font-semibold tracking-tight text-foreground">{t("endpoints")}</h2>
+        <div>
+          <h2 className="text-base font-semibold tracking-tight text-foreground">{t("endpoints")}</h2>
+          <p className="mt-1 text-sm text-muted">{t("headersHint")}</p>
+        </div>
         <SearchField
           value={query}
           onChange={setQuery}
@@ -242,6 +263,11 @@ export default function ApiTab() {
                   key={`${row.method}:${row.path}`}
                   title={<code className="font-mono text-xs break-words">{row.path}</code>}
                   description={row.summary}
+                  details={
+                    row.headers?.length
+                      ? [{ label: t("columns.headers"), value: headerList(row), wide: true }]
+                      : []
+                  }
                   chips={
                     <>
                       <Chip size="sm" variant="soft">
@@ -281,7 +307,10 @@ export default function ApiTab() {
                           <code className="font-mono text-xs">{row.path}</code>
                         </Table.Cell>
                         <Table.Cell>{styleChip(row)}</Table.Cell>
-                        <Table.Cell>{row.summary}</Table.Cell>
+                        <Table.Cell>
+                          <span className="block">{row.summary}</span>
+                          {headerList(row)}
+                        </Table.Cell>
                         {canTry ? <Table.Cell>{tryButton(row)}</Table.Cell> : null}
                       </Table.Row>
                     ))}

@@ -9,7 +9,7 @@ import { MANAGEMENT_PERMISSIONS } from "@/lib/management/scope";
 import { accessWindowsSchema, allowedEndpointsSchema, keyAccountIdsSchema } from "@/schemas/keys";
 import { MAX_PAUSE_HOURS } from "@/lib/keys/pause";
 import { DEFAULT_NEW_MODEL_MODE, MAX_CONCURRENCY, NEW_MODEL_MODES, vertexTargetSchema } from "@/schemas/providers";
-import { budgetPeriod, MAX_BOOST_HOURS } from "@/lib/utils/budget";
+import { BUDGET_MODES, budgetPeriod, MAX_BOOST_HOURS, MAX_OVERRUN_PCT } from "@/lib/utils/budget";
 import { labelKey, parseLabelFilter } from "@/lib/usage/labels";
 
 const id = z.string().trim().min(1).max(64);
@@ -111,6 +111,7 @@ const modelAliasFields = {
   variants: z.array(z.enum(MODEL_VARIANTS)).max(MODEL_VARIANTS.length),
   extra_names: z.array(z.string().trim().min(1).max(EXTRA_NAME_MAX)).max(MAX_EXTRA_NAMES),
   merge_system_messages: z.boolean(),
+  session_affinity: z.boolean(),
   strategy,
   billing_mode: billingMode,
   price_input_per_1k: money,
@@ -133,6 +134,7 @@ export const modelAliasCreateSchema = z
     variants: modelAliasFields.variants.default([]),
     extra_names: modelAliasFields.extra_names.default([]),
     merge_system_messages: modelAliasFields.merge_system_messages.default(false),
+    session_affinity: modelAliasFields.session_affinity.default(false),
     strategy: strategy.default("least_inflight"),
     billing_mode: billingMode.default("routed"),
     price_input_per_1k: money.default(0),
@@ -266,8 +268,14 @@ export const budgetUpdateSchema = z
       .max(20)
       .refine((value) => budgetPeriod(value) !== null, "use daily, weekly, monthly, or a day count like 30d")
       .optional(),
+    budget_mode: z.enum(BUDGET_MODES).optional(),
+    overrun_percent: z.number().int().min(1).max(MAX_OVERRUN_PCT).nullable().optional(),
   })
-  .strict();
+  .strict()
+  .refine((value) => value.budget_mode !== "hard" || value.overrun_percent == null, {
+    message: "overrun_percent applies only to soft budgets",
+    path: ["overrun_percent"],
+  });
 
 export const temporaryBudgetSchema = z
   .object({

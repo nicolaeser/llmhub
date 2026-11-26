@@ -1,9 +1,14 @@
 import { gatewayPath, MANAGEMENT_PREFIX } from "@/lib/gateway/api-paths";
 import { ANTHROPIC_VERSION_2023, ANTHROPIC_VERSION_2026 } from "@/lib/gateway/protocols/anthropic-version";
-import type { OpenApiMethod, OpenApiPath, TryTarget } from "@/types/api-ref";
+import type { OpenApiHeader, OpenApiMethod, OpenApiPath, TryTarget } from "@/types/api-ref";
 
 export const ANTHROPIC_VERSION = ANTHROPIC_VERSION_2026;
 export const ANTHROPIC_LEGACY_VERSION = ANTHROPIC_VERSION_2023;
+
+const SESSION_AFFINITY_HEADERS: readonly OpenApiHeader[] = [
+  { name: "x-session-affinity", direction: "request" },
+  { name: "x-llmhub-deployment", direction: "response" },
+];
 
 export const OPENAPI_METHODS = [
   "GET",
@@ -174,7 +179,12 @@ export function exampleRequestBody(
     "/api/mgmt/members/{id}": { team_id: null, blocked: false },
     "/api/mgmt/members/{id}/pause": { hours: 168 },
     "/api/mgmt/budgets/alerts": { thresholds: [50, 80, 100] },
-    "/api/mgmt/budgets/{entity_type}/{entity_id}": { max_budget: 250, budget_duration: "30d" },
+    "/api/mgmt/budgets/{entity_type}/{entity_id}": {
+      max_budget: 250,
+      budget_duration: "30d",
+      budget_mode: "soft",
+      overrun_percent: 10,
+    },
     "/api/mgmt/budgets/{entity_type}/{entity_id}/temporary": { amount: 50, hours: 24 },
     "/api/mgmt/markups": { scope: "org", target_id: "org_id", model: "claude-*", percent: 15, note: "Contract 2026" },
     "/api/mgmt/markups/{id}": { percent: -5 },
@@ -185,7 +195,7 @@ export function exampleRequestBody(
 }
 
 export const OPENAPI_PATHS: OpenApiPath[] = [
-  { method: "POST", path: "/api/v1/chat/completions", summary: "Create a chat completion", style: "openai" },
+  { method: "POST", path: "/api/v1/chat/completions", summary: "Create a chat completion", style: "openai", headers: SESSION_AFFINITY_HEADERS },
   { method: "POST", path: "/api/v1/completions", summary: "Create a text completion", style: "openai" },
   { method: "POST", path: "/api/v1/embeddings", summary: "Create embeddings", style: "openai" },
   { method: "POST", path: "/api/v1/rerank", summary: "Rerank documents by relevance to a query", style: "openai" },
@@ -228,16 +238,19 @@ export const OPENAPI_PATHS: OpenApiPath[] = [
   { method: "GET", path: "/api/v1/videos/{id}/content", summary: "Download video content", style: "openai" },
   { method: "POST", path: "/api/v1/videos/{id}/remix", summary: "Remix a video", style: "openai" },
   { method: "GET", path: "/api/v1/responses", summary: "List responses", style: "openai" },
-  { method: "POST", path: "/api/v1/responses", summary: "Create a response", style: "openai" },
+  { method: "POST", path: "/api/v1/responses", summary: "Create a response", style: "openai", headers: SESSION_AFFINITY_HEADERS },
   { method: "GET", path: "/api/v1/responses/{id}", summary: "Retrieve a response", style: "openai" },
   { method: "DELETE", path: "/api/v1/responses/{id}", summary: "Delete a response", style: "openai" },
   { method: "GET", path: "/api/v1/responses/{id}/input_items", summary: "List a response's input items", style: "openai" },
   { method: "POST", path: "/api/v1/responses/input_tokens", summary: "Count Responses input tokens", style: "openai" },
-  { method: "POST", path: "/api/v1/messages", summary: "Create an Anthropic Messages response", style: "anthropic" },
+  { method: "POST", path: "/api/v1/messages", summary: "Create an Anthropic Messages response", style: "anthropic", headers: SESSION_AFFINITY_HEADERS },
   { method: "POST", path: "/api/v1/messages/count_tokens", summary: "Count Anthropic Messages input tokens", style: "anthropic" },
   { method: "POST", path: "/api/v1/systemone", summary: "Answer typed decision questions (TypeSafe Jev)", style: "openai" },
   { method: "POST", path: "/api/v1/integrations/mcp", summary: "Call a published integration tool over MCP", style: "openai" },
-  { method: "POST", path: "/api/v1/mcp", summary: "List and call the caller's MCP tools", style: "openai" },
+  { method: "POST", path: "/api/v1/mcp", summary: "List and call the caller's MCP tools (Streamable HTTP, every MCP version)", style: "openai" },
+  { method: "GET", path: "/api/v1/mcp", summary: "Open the deprecated MCP HTTP+SSE stream for clients that only speak 2024-11-05", style: "openai" },
+  { method: "GET", path: "/api/v1/mcp/sse", summary: "Open the deprecated MCP HTTP+SSE stream (2024-11-05 transport)", style: "openai" },
+  { method: "POST", path: "/api/v1/mcp/messages", summary: "Send a message on an open MCP HTTP+SSE stream", style: "openai" },
   { method: "POST", path: "/api/v1/moderations", summary: "Classify content", style: "openai" },
   { method: "POST", path: "/api/v1/ocr", summary: "Extract text from images", style: "openai" },
   { method: "POST", path: "/api/subscription/v1/chat/completions", summary: "Create a chat completion on a subscription", style: "openai" },

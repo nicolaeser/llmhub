@@ -16,7 +16,7 @@ import { useTranslations } from "next-intl";
 import FormDialog from "@/components/console/form-dialog";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
-import { MCP_STATIC_AUTH_TYPES, authNameValid, authUsesName } from "@/schemas/mcp";
+import { MCP_STATIC_AUTH_TYPES, authNameValid, authUsesName, installedAuthName } from "@/schemas/mcp";
 import type { ActionFail } from "@/types/actions";
 import type { McpInstallationView, McpServerView, McpStaticAuthType } from "@/types/mcp";
 
@@ -75,8 +75,8 @@ export default function InstallDialog({
   const needsSecret = enabled && authType !== "none" && !secret.trim() && !keepsSecret;
   const togglesTemplate = Boolean(canManage && onTemplate);
   const connect = (togglesTemplate ? shared : Boolean(server?.template)) && Boolean(orgId);
-  const authTypes = MCP_STATIC_AUTH_TYPES.filter((type) => server?.kind === "hosted" || type !== "query");
-  const fieldsOk = authNameValid(authType, authHeader) && urlOk(baseUrl) && !needsSecret;
+  const defaultName = server ? installedAuthName(authType, "", server) : "";
+  const fieldsOk = authNameValid(authType, authHeader.trim() || defaultName) && urlOk(baseUrl) && !needsSecret;
   const templateChanged = Boolean(togglesTemplate && server && shared !== server.template);
 
   function apply(row: McpInstallationView | null, fallback: McpStaticAuthType) {
@@ -195,7 +195,7 @@ export default function InstallDialog({
         fullWidth
         selectedKey={authType}
         onSelectionChange={(key) => {
-          const next = authTypes.find((item) => item === String(key));
+          const next = MCP_STATIC_AUTH_TYPES.find((item) => item === String(key));
           if (next) setAuthType(next);
         }}
         isDisabled={pending || !orgId}
@@ -207,7 +207,7 @@ export default function InstallDialog({
         </Select.Trigger>
         <Select.Popover>
           <ListBox aria-label={t("install.authType")}>
-            {authTypes.map((item) => (
+            {MCP_STATIC_AUTH_TYPES.map((item) => (
               <ListBox.Item key={item} id={item} textValue={t("install.authOption", { type: item })}>
                 {t("install.authOption", { type: item })}
                 <ListBox.ItemIndicator />
@@ -219,14 +219,19 @@ export default function InstallDialog({
       {authUsesName(authType) ? (
         <TextField
           fullWidth
-          isRequired
+          isRequired={!defaultName}
           value={authHeader}
           onChange={setAuthHeader}
           isInvalid={authHeader.trim() !== "" && !authNameValid(authType, authHeader)}
           isDisabled={pending}
         >
           <Label>{t("form.authName", { type: authType })}</Label>
-          <Input autoComplete="off" spellCheck={false} placeholder={t("form.authNamePlaceholder", { type: authType })} />
+          <Input
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={defaultName || t("form.authNamePlaceholder", { type: authType })}
+          />
+          {defaultName ? <Description>{t("install.nameDefault", { type: authType, name: defaultName })}</Description> : null}
         </TextField>
       ) : null}
       {authType !== "none" ? (

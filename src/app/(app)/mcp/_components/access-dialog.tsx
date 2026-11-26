@@ -10,6 +10,7 @@ import type { McpAccessLevel, McpAssignmentView, McpServerView, McpTargetOptions
 import { loadMcpTargetsAction, saveMcpAssignmentsAction } from "../_action";
 import AccessRules from "./access-rules";
 import { EMPTY_TARGETS } from "./access-view";
+import { connectedOrgsOf } from "./server-view";
 
 export default function AccessDialog({
   state,
@@ -94,6 +95,7 @@ export default function AccessDialog({
           allowedTools: server?.allowedTools ?? [],
           tools: server?.tools ?? [],
         }}
+        connectedOrgs={server?.template ? connectedOrgsOf(server) : null}
         pending={pending}
       />
     </FormDialog>

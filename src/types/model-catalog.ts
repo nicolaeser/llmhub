@@ -1,3 +1,5 @@
+import type { ModelRole } from "@/lib/models/model-role";
+
 export type CatalogSource = "route" | "manual" | "rule" | "jev" | "";
 
 export type CatalogStatus = "active" | "new" | "disabled";
@@ -131,6 +133,7 @@ export type CatalogFamilyView = {
   family: string;
   vendor: string;
   displayName: string;
+  role: ModelRole;
   variants: CatalogGroupView[];
 };
 

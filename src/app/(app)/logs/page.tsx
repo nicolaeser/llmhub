@@ -8,12 +8,14 @@ import PageHeader from "@/components/console/page-header";
 import PageStatus, { LoadError, SectionLoading } from "@/components/console/page-status";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { useActionData } from "@/lib/hooks/use-action-data";
-import { useLiveConnected, useLiveRequests } from "@/lib/hooks/use-live";
+import { useLiveRequests } from "@/lib/hooks/use-live";
 import { useRouter } from "@/i18n/routing";
 import { setSearchParams, useSearchString } from "@/lib/hooks/use-search-param";
+import { mergeLiveRows } from "@/lib/gateway/request-logs/log-live";
 import { logFilterParams, logFiltersFromSearch } from "@/lib/gateway/request-logs/request-log-query";
 import { isActionFail } from "@/lib/http/action-result";
 import type {
+  LiveLogRows,
   LogKind,
   LogFilterValues,
   LogOptions,
@@ -25,16 +27,23 @@ import type {
 import { countNewLogsAction, loadLogDetailAction, loadLogOptionsAction, loadLogsAction } from "./_action";
 import LogDetailDialog from "./_components/log-detail-dialog";
 import LogFilters from "./_components/log-filters";
+import KeyUsageCard from "./_components/key-usage-card";
 import LogTable from "./_components/log-table";
 import { download, exportHref, queryFilters, sessionHref } from "./_components/log-export";
+import RunningRequests from "./_components/running-requests";
 import SessionList from "./_components/session-list";
+import { useLogStream } from "./_components/use-log-stream";
 
 const PAGE_SIZE = 50;
 const POLL_INTERVAL_MS = 15_000;
-const LIVE_RELOAD_GAP_MS = 10_000;
+const LIVE_RELOAD_GAP_MS = 2_000;
 const NO_OPTIONS: LogOptions = { models: [], keys: [], users: [] };
 const LOG_KINDS: readonly LogKind[] = ["requests", "sessions", "spend", "audit"];
 const EXPORT_FORMATS = ["csv", "jsonl"] as const;
+
+function newestOf(rows: { createdAt: string }[], current: string | null): string | null {
+  return rows.reduce((newest, row) => (!newest || row.createdAt > newest ? row.createdAt : newest), current);
+}
 
 function kindOf(search: string): LogKind {
   const requested = new URLSearchParams(search).get("tab");
@@ -54,22 +63,54 @@ export default function LogsPage() {
   const [newestSeen, setNewestSeen] = useState<string | null>(null);
   const [fresh, setFresh] = useState<NewLogsCount | null>(null);
   const detailState = useOverlayState();
+  const missedRows = useRef(false);
+  const staleOthers = useRef(false);
   const logsState = useActionData(
     () =>
       loadLogsAction({ page: 1, pageSize: PAGE_SIZE, filters: queryFilters(logFiltersFromSearch(window.location.search)) }),
     (data) => {
-      if (data.page === 1) setNewestSeen(data.requests[0]?.createdAt ?? null);
+      if (data.page !== 1) return;
+      staleOthers.current = false;
+      setNewestSeen(data.requests[0]?.createdAt ?? null);
     },
   );
   const { data: logs, setData: setLogs, pending } = logsState;
   const page = logs?.page ?? 1;
-  const connected = useLiveConnected();
-  const live = useLiveRequests();
-  const liveKey = live ? `${live.requestId ?? ""}|${live.auditId ?? ""}` : "";
-  const liveRequestId = live?.requestId ?? null;
-  const newestId = page === 1 ? (logs?.requests[0]?.id ?? null) : null;
+  const activeKind: LogKind = requestedKind === "audit" && !logs?.canAudit ? "requests" : requestedKind;
+  const streamFilters = useMemo(() => queryFilters(filters), [filters]);
+  const stream = useLogStream(logs ? streamFilters : null, newestSeen, receiveRows);
+  const connected = stream.connected;
+  const auditId = useLiveRequests()?.auditId ?? "";
+  const liveKey = `${stream.version}|${auditId}`;
   const handledKey = useRef<string | null>(null);
   const reloadedAt = useRef(0);
+
+  function receiveRows(batch: LiveLogRows) {
+    if (pending) {
+      missedRows.current = true;
+      return;
+    }
+    if (!logs || logs.page !== 1) return;
+    if (batch.more) {
+      reloadFirstPage();
+      return;
+    }
+    staleOthers.current = true;
+    setLogs((current) => {
+      const merged = mergeLiveRows(current.requests, batch.rows, current.pageSize);
+      return merged.added ? { ...current, requests: merged.rows, requestTotal: current.requestTotal + merged.added } : current;
+    });
+    setNewestSeen((current) => newestOf(batch.rows, current));
+  }
+
+  function reloadFirstPage() {
+    staleOthers.current = false;
+    loadLogsAction({ page: 1, pageSize: PAGE_SIZE, filters: queryFilters(filters) }).then((res) => {
+      if (isActionFail(res)) return;
+      setLogs(res);
+      setNewestSeen(res.requests[0]?.createdAt ?? null);
+    });
+  }
 
   useEffect(() => {
     loadLogOptionsAction().then(
@@ -100,11 +141,13 @@ export default function LogsPage() {
   }
 
   useEffect(() => {
-    if (!connected || !liveKey || handledKey.current === liveKey) return;
-    if (handledKey.current === null && liveRequestId === newestId) {
+    if (pending || handledKey.current === liveKey) return;
+    const merged = page === 1 && (activeKind === "requests" || activeKind === "sessions");
+    if (handledKey.current === null || (merged && !missedRows.current)) {
       handledKey.current = liveKey;
       return;
     }
+    missedRows.current = false;
     let active = true;
     const since = newestSeen;
     const timer = setTimeout(
@@ -130,7 +173,7 @@ export default function LogsPage() {
       active = false;
       clearTimeout(timer);
     };
-  }, [connected, liveKey, liveRequestId, newestId, newestSeen, page, filters, setLogs]);
+  }, [pending, liveKey, activeKind, newestSeen, page, filters, setLogs]);
 
   useEffect(() => {
     if (page !== 1 || connected) return;
@@ -166,7 +209,7 @@ export default function LogsPage() {
     );
   }
 
-  const kind: LogKind = requestedKind === "audit" && !logs.canAudit ? "requests" : requestedKind;
+  const kind = activeKind;
   const total =
     kind === "requests" ? logs.requestTotal : kind === "spend" ? logs.spendTotal : logs.auditTotal;
   const newer = page > 1 && fresh && fresh.since === newestSeen && fresh.count > 0 ? fresh : null;
@@ -215,12 +258,14 @@ export default function LogsPage() {
           load(1, next);
         }}
       />
+      {filters.keyId ? <KeyUsageCard key={filters.keyId} keyId={filters.keyId} stream={stream} className="mb-4" /> : null}
       <Tabs
         variant="secondary"
         selectedKey={kind}
         onSelectionChange={(key) => {
           const next = String(key);
           setSearchParams({ tab: next === "requests" ? null : next });
+          if (page === 1 && next !== "requests" && next !== "sessions" && staleOthers.current) reloadFirstPage();
         }}
         className="mb-4 max-w-full"
       >
@@ -251,7 +296,7 @@ export default function LogsPage() {
       <LoadError state={logsState} className="mb-4" />
 
       {kind === "sessions" ? (
-        <SessionList key={`sessions:${filterKey}`} filters={filters} onOpen={openSession} />
+        <SessionList key={`sessions:${filterKey}`} filters={filters} stream={stream} onOpen={openSession} />
       ) : (
         <>
         {newer ? (
@@ -261,6 +306,14 @@ export default function LogsPage() {
               {t("newRequests", { count: newer.count, capped: String(newer.capped) })}
             </Button>
           </div>
+        ) : null}
+
+        {kind === "requests" && page === 1 && !pending ? (
+          <RunningRequests
+            items={stream.running}
+            keyLabel={(id) => options.keys.find((item) => item.id === id)?.label ?? ""}
+            className="mb-4"
+          />
         ) : null}
 
         {pending ? <SectionLoading shape="table" rows={8} /> : <LogTable kind={kind} logs={logs} onOpen={openDetail} />}

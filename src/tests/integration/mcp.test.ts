@@ -6,6 +6,7 @@ import { adoptMcpAccessLevels } from "@/lib/bootstrap/mcp-access-levels";
 import { saveMcpPermissions } from "@/lib/mcp/catalog";
 import { loadKeyMcpAccess, saveKeyMcpAccess } from "@/lib/mcp/key-access";
 import {
+  createHostedMcpServer,
   createMcpServer,
   deleteMcpServer,
   loadCompanyMcpServers,
@@ -351,6 +352,107 @@ test("a company connects its own key to an offered server from the company pages
   } finally {
     await prisma.mcpServer.deleteMany({ where: { id: { in: [offered.id, plain.id] } } });
     await prisma.organization.delete({ where: { id: org.id } });
+    await prisma.gatewayAuditLog.deleteMany({ where: { actor: owner.user.id } });
+    await prisma.user.delete({ where: { id: owner.user.id } });
+  }
+});
+
+test("a shared hosted server reaches a company rule once the company connects with the default parameter name", async () => {
+  const owner = await ownerSession();
+  const org = await prisma.organization.create({ data: { alias: uniqueName("org") } });
+  const key = await prisma.virtualKey.create({ data: { hash: uniqueName("hash"), prefix: "sk-it", orgId: org.id } });
+  const route = (name: string, action: "read" | "write", method: string) => ({
+    name,
+    title: name,
+    description: name,
+    action,
+    method,
+    path: `/items/${name}`,
+    query: [],
+    inputSchema: { type: "object", properties: {}, required: [] },
+  });
+  let serverId = "";
+  try {
+    const created = await runAsPrincipal(owner, () =>
+      createHostedMcpServer({
+        name: uniqueName("shared").slice(0, 40),
+        description: "",
+        baseUrl: "https://api.example.com/v1",
+        internal: false,
+        authType: "query",
+        authHeader: "api_key",
+        tools: [route("list_items", "read", "GET"), route("create_item", "write", "POST")],
+        template: true,
+        defaultAccess: "none",
+        assignments: [{ scope: "org", id: org.id, access: "read" }],
+      }),
+    );
+    serverId = created.server.id;
+    assert.equal(created.server.defaultAccess, "none");
+    assert.deepEqual(
+      created.server.assignments.map((row) => [row.scope, row.id, row.access]),
+      [["org", org.id, "read"]],
+    );
+    const chain = { orgId: org.id, teamId: "", projectId: "", memberId: "", keyId: key.id };
+    assert.equal(toolNames(await loadMcpServers(chain), serverId), null);
+
+    const connect = (authHeader: string) =>
+      runAsPrincipal(owner, () =>
+        saveCompanyMcpInstallation({ serverId, orgId: org.id, enabled: true, baseUrl: "", authType: "query", authHeader, secret: "company-key" }),
+      );
+    const saved = await connect("");
+    assert.equal(saved.server.installations[0]?.authHeader, "");
+    const reached = await loadMcpServers(chain);
+    assert.deepEqual(toolNames(reached, serverId), ["list_items"]);
+    assert.equal(reached.records.get(serverId)?.authHeader, "api_key");
+
+    await connect("token");
+    assert.equal((await loadMcpServers(chain)).records.get(serverId)?.authHeader, "token");
+    await assert.rejects(
+      runAsPrincipal(owner, () =>
+        saveCompanyMcpInstallation({ serverId, orgId: org.id, enabled: true, baseUrl: "", authType: "header", authHeader: "", secret: "x" }),
+      ),
+      /VALIDATION/,
+    );
+  } finally {
+    if (serverId) await prisma.mcpServer.delete({ where: { id: serverId } });
+    await prisma.virtualKey.delete({ where: { id: key.id } });
+    await prisma.organization.delete({ where: { id: org.id } });
+    await prisma.gatewayAuditLog.deleteMany({ where: { actor: owner.user.id } });
+    await prisma.user.delete({ where: { id: owner.user.id } });
+  }
+});
+
+test("a remote MCP server signs in with an encrypted token in the address", async () => {
+  const owner = await ownerSession();
+  let serverId = "";
+  try {
+    const created = await runAsPrincipal(owner, () =>
+      createMcpServer({
+        name: uniqueName("token").slice(0, 40),
+        description: "",
+        url: "http://127.0.0.1:1/mcp",
+        authType: "query",
+        authHeader: "token",
+        secret: "address-token-SECRET",
+        clearSecret: false,
+        internal: true,
+        enabled: true,
+        toolsRestricted: false,
+        allowedTools: [],
+      }),
+    );
+    serverId = created.server.id;
+    assert.equal(created.server.authType, "query");
+    assert.equal(created.server.authHeader, "token");
+    assert.equal(created.server.hasSecret, true);
+    assert.ok(!JSON.stringify(created.server).includes("address-token-SECRET"));
+    const stored = await prisma.mcpServer.findUniqueOrThrow({ where: { id: serverId } });
+    assert.equal(stored.url, "http://127.0.0.1:1/mcp");
+    assert.ok(stored.authSecret.startsWith("enc1:"));
+    assert.ok(!stored.lastError.includes("SECRET"));
+  } finally {
+    if (serverId) await prisma.mcpServer.delete({ where: { id: serverId } });
     await prisma.gatewayAuditLog.deleteMany({ where: { actor: owner.user.id } });
     await prisma.user.delete({ where: { id: owner.user.id } });
   }

@@ -1,7 +1,10 @@
-import type { CapLink } from "@/types/structure";
+import type { CostCap } from "@/types/billing";
+import type { BudgetMode, CapLink } from "@/types/structure";
 
 export const MAX_BUDGET_AMOUNT = 1_000_000_000;
 export const MAX_BOOST_HOURS = 720;
+export const MAX_OVERRUN_PCT = 100;
+export const BUDGET_MODES = ["soft", "hard"] as const satisfies readonly BudgetMode[];
 
 export function budgetPeriod(value: string): string | null {
   const raw = value.trim().toLowerCase();
@@ -21,6 +24,29 @@ export function budgetAmount(value: unknown): number | null {
   return Math.round(n * 100) / 100;
 }
 
+export function budgetMode(value: unknown): BudgetMode {
+  return value === "hard" ? "hard" : "soft";
+}
+
+export function parseBudgetMode(value: unknown): BudgetMode | null {
+  return BUDGET_MODES.find((mode) => mode === value) ?? null;
+}
+
+export function overrunPercent(value: unknown): number | null | undefined {
+  if (value === null || value === undefined || value === "") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isInteger(n) && n >= 1 && n <= MAX_OVERRUN_PCT ? n : undefined;
+}
+
+export function budgetCeiling(limit: number, mode: BudgetMode, overrunPct: number | null): number | null {
+  if (mode === "hard") return limit;
+  return overrunPct == null ? null : limit * (1 + overrunPct / 100);
+}
+
+export function tighterCap(current: CostCap | null, next: CostCap): CostCap {
+  return current && current.limit <= next.limit ? current : next;
+}
+
 export function capConflict(cap: number, ancestors: CapLink[]): CapLink | null {
   if (!(cap > 0)) return null;
   return ancestors.find((link) => link.cap > 0 && cap > link.cap) ?? null;
@@ -36,8 +62,11 @@ export function headroom(chain: CapLink[]): { amount: number; link: CapLink } | 
   return best;
 }
 
+export const BUDGET_WARNING_RATIO = 0.8;
+export const BUDGET_DANGER_RATIO = 0.95;
+
 export function meterColor(ratio: number): "accent" | "warning" | "danger" {
-  if (ratio >= 1) return "danger";
-  if (ratio >= 0.8) return "warning";
+  if (ratio >= BUDGET_DANGER_RATIO) return "danger";
+  if (ratio >= BUDGET_WARNING_RATIO) return "warning";
   return "accent";
 }

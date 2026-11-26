@@ -87,6 +87,7 @@ export default function ModelGroupDialog({
   const [variants, setVariants] = useState<ModelVariant[]>(editing?.variants ?? []);
   const [extraNames, setExtraNames] = useState((editing?.extraNames ?? []).join(", "));
   const [mergeSystemMessages, setMergeSystemMessages] = useState(editing?.mergeSystemMessages ?? false);
+  const [sessionAffinity, setSessionAffinity] = useState(editing?.sessionAffinity ?? false);
   const [billingMode, setBillingMode] = useState<BillingMode>(billingModeOf(editing?.billingMode));
   const [price, setPrice] = useState({ input: editing?.priceInput ?? 0, output: editing?.priceOutput ?? 0 });
   const [priceTimeZone, setPriceTimeZone] = useState(editing?.priceTimeZone || "UTC");
@@ -145,6 +146,7 @@ export default function ModelGroupDialog({
         variants,
         extraNames: extraNamesOf(extraNames),
         mergeSystemMessages,
+        sessionAffinity,
         strategy,
         billingMode,
         priceInput: validPrice(price.input) ? price.input : undefined,
@@ -281,6 +283,17 @@ export default function ModelGroupDialog({
             </Select.Popover>
             <Description>{t("strategyHint", { strategy })}</Description>
           </Select>
+        ) : null}
+        {deps.length > 1 || sessionAffinity ? (
+          <Switch isSelected={sessionAffinity} onChange={setSessionAffinity} isDisabled={pending}>
+            <Switch.Content>
+              <Switch.Control>
+                <Switch.Thumb />
+              </Switch.Control>
+              <Label>{t("fields.sessionAffinity")}</Label>
+            </Switch.Content>
+            <Description>{t("fields.sessionAffinityHint")}</Description>
+          </Switch>
         ) : null}
         {previewCard}
       </>

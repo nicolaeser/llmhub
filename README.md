@@ -15,6 +15,7 @@ LLM Hub runs as one Docker image with PostgreSQL. Redis and S3-compatible storag
 - [Features](#features)
 - [Configuration](#configuration)
 - [Subscription sign-ins](#subscription-sign-ins)
+- [Session affinity](#session-affinity)
 - [Backup and restore](#backup-and-restore)
 - [Upgrading](#upgrading)
 - [Automatic updates](#automatic-updates)
@@ -145,7 +146,7 @@ The **Developer** page in the console has step-by-step guides for Claude Code, C
 
 - **One API for many providers.** `/api/v1` supports chat completions, completions, Responses, Anthropic Messages (with token counting), embeddings, moderations, rerank, OCR, images, audio, files, batches, videos, and vector stores with search.
 - **Providers.** OpenAI, Anthropic, OpenRouter (global and EU), xAI, the Kimi API Platform (global and China), the Meta Model API, the Google Gemini API, Google Vertex AI, and any OpenAI-compatible endpoint. Vertex AI works with a service account key (with project and location) or an express mode API key, and serves Gemini, Claude, Imagen, and partner models.
-- **Routing.** A model group maps one name (alias) to several deployments. It picks one by least in-flight requests, weighted random, lowest cost, priority, round robin, or remaining quota. Fallbacks and cooldowns handle failing providers, and a health view shows their state. A model catalog finds new provider models every two hours and keeps aliases up to date.
+- **Routing.** A model group maps one name (alias) to several deployments. It picks one by least in-flight requests, weighted random, lowest cost, priority, round robin, or remaining quota. Fallbacks and cooldowns handle failing providers, and a health view shows their state. Optional [session affinity](#session-affinity) keeps each conversation on one replica of a self-hosted model, so its prompt cache is reused. A model catalog finds new provider models every two hours and keeps aliases up to date.
 - **Subscription accounts.** You can also connect ChatGPT, Claude, SuperGrok, Google Antigravity, Kimi Code (kimi.com or kimi.ai), Meta Muse Code, and Devin plans. See [Subscription sign-ins](#subscription-sign-ins).
 - **Companies and budgets.** Companies, departments, projects, and people form the structure. An API key belongs to a project, a person, or a console user. Every level can have a spending limit with a reset period and temporary boosts. A lower level can never have a higher limit than the level above it.
 - **Key limits.** Keys support requests and tokens per minute (RPM, TPM), a cost limit per request, model allowlists, reusable model templates (providers, regions, zero data retention, no training, maximum retention), client IP allowlists, endpoint restrictions, access time windows, expiry, and rotation.
@@ -178,6 +179,7 @@ Default retention: request logs and stored prompts and responses are deleted aft
 | `OIDC_CLIENT_SECRET` | no | unset | Client secret for OIDC single sign-on. The issuer, client ID, group-to-role rules, and SSO-only mode are set in **Settings → Sign-in**. The redirect URI is `NEXT_PUBLIC_APP_URL/sso/callback`. |
 | `BUILD_ID` | no | `development` | Release version shown by `/internal-api/version` and used by the update check. Published images set it when they are built. Don't set it yourself. |
 | `LLMHUB_REDACTOR_URL` | no | unset | Base URL of a PII redaction service that speaks the [redaction protocol](#redaction-protocol). While it is set, every start keeps an internal provider and the internal-only alias `pii-tracer` pointing at it. Without it, that provider is turned off. `docker-compose.rm.yml` sets it to `http://redactor:8080`. |
+| `SESSION_AFFINITY_SPILL_MARGIN` | no | `4` | For models with [session affinity](#session-affinity): how many more requests in flight a conversation's deployment may have than the least busy deployment of the model before the conversation moves. Higher keeps more conversations on their replica, lower spreads load sooner. A whole number of 0 or more; any other value stops the start. |
 | `SENTRY_DSN` | no | unset | Sentry DSN for server errors and failed background jobs. Without it, Sentry stays off and sends nothing. See [Error reporting](#error-reporting). |
 | `SENTRY_ENVIRONMENT` | no | `production` | Environment name on Sentry events (`development` when `NODE_ENV` is `development`). |
 | `SENTRY_RELEASE` | no | `BUILD_ID` | Release name on Sentry events. |
@@ -321,6 +323,86 @@ Subscription accounts (Claude, ChatGPT/Codex, Kimi, SuperGrok, Antigravity, and 
 
 > [!WARNING]
 > `docker compose down -v` deletes the journal together with the volume. Leave out `-v`.
+
+## Session affinity
+
+Session affinity keeps every conversation on the same deployment of a model. Turn it on for a model group whose deployments are several replicas of one self-hosted model (vLLM, SGLang, llama.cpp, TGI).
+
+**Why.** Each replica keeps a prefix cache (KV cache) of the prompts it has seen. Coding agents such as Claude Code, opencode, Cline, and Aider send the whole conversation again with every step, often 20,000 to 200,000 tokens, and it only grows. When a step lands on the replica that served the step before, that replica reuses its cache and only reads the new part. On another replica, the whole conversation is read again from the start. That slows the request and every other request on that replica. In a test with two GPUs and one vLLM replica each, a follow-up step at 78,000 tokens took about 50 seconds on the other replica and about 3 seconds on the same one, and four agents at once generated code at 94 instead of 59 tokens per second.
+
+A load balancer in front of the replicas (Caddy, nginx, a Kubernetes service) can't do this. All requests come from LLM Hub without cookies, so it can't tell conversations apart. LLM Hub can.
+
+**When to turn it on.** For a model group with two or more deployments that are replicas of the same model on your own servers, when clients send long conversations (agents, chat with long histories).
+
+**When to leave it off.** For cloud APIs (OpenAI, Anthropic, and others manage their caches themselves), for model groups with one deployment, and for short independent requests such as embeddings, classification, or one-shot prompts. It is off by default, and without it nothing changes.
+
+### How it works
+
+It applies to every request routed through the model group: Chat Completions, Responses, and Anthropic Messages, and also embeddings and the other model endpoints. The routing strategy of the model group (for example least busy) still picks the deployment for the **first** request of a conversation. Session affinity then remembers that choice and sends the next requests of the same conversation there.
+
+LLM Hub finds the conversation with the first of these keys:
+
+1. A session key the client already sends: `prompt_cache_key` (Chat Completions and Responses), the cache key in Claude Code's `metadata`, or the `x-claude-code-session-id` header.
+2. The `x-session-affinity` request header. Send it when your client wants to decide itself which requests belong together. At most 512 characters.
+3. Otherwise a fingerprint of the start of the conversation: the system prompt and the first user message. For Chat Completions these are the `system` and `developer` messages and the first `user` message, for Anthropic Messages `system` and the first user message, and for Responses `instructions` and the first input item. Only text counts. Images and files count by a hash of their reference, line endings and trailing spaces are normalized, and only the first 64 KB of each part are read. Responses requests with a `conversation` use its ID; requests that continue with `previous_response_id` only have no fingerprint.
+
+Every key is combined with the model group and the project or person of the API key (for a console user's own key, the key itself), so different projects never share an assignment. Answers, tool results, and new user messages at the end don't change the key. Because the fingerprint includes the first user message, users of the same client with the same system prompt still spread across the replicas. When a client compacts its conversation (a new start), the conversation gets a new key and may move. That costs nothing, because the replica has no cache for the new start anyway.
+
+Keys are stored only as hashes. No prompt text goes to the request log, Redis, or the database for this.
+
+Each assignment points to one deployment and stays for 30 minutes after the last request of the conversation. With Redis, all replicas of LLM Hub share the assignments (`llmhub:deployment-pin:v1:<group>:<session>`). Without Redis, or while it is down, each LLM Hub process keeps up to 20,000 assignments in memory.
+
+For each request with a known conversation:
+
+| Outcome | When | What happens |
+| --- | --- | --- |
+| `hit` | The assigned deployment is healthy, not cooling down, has a free concurrency slot, and is not overloaded. | It serves the request, and the assignment is extended. |
+| `spill` | The assigned deployment has no free concurrency slot, or more than `SESSION_AFFINITY_SPILL_MARGIN` (default 4) requests in flight above the least busy deployment of the model. | The strategy picks another deployment, and the conversation moves there. |
+| `failover` | The assigned deployment is unhealthy, cooling down, or already failed for this request. | The strategy picks another deployment, and the conversation moves there. |
+| `new` | The conversation has no assignment yet. | The strategy picks, and the choice is remembered. |
+| `off` | Session affinity is on, but no key could be found (for example a request without a user message). | The strategy picks as usual. |
+
+Retries, fallbacks, and overflow models work as before. A deployment that already failed for a request is never chosen again for it because of an assignment. Subscription accounts keep their own session pinning (see [Subscription sign-ins](#subscription-sign-ins)).
+
+### Set it up
+
+Example: one model, `Qwen3.8-27B`, runs on two GPUs, with one vLLM replica each, reachable at `http://<host>/gpu0/v1` and `http://<host>/gpu1/v1` with the same API key.
+
+1. On the **Providers** page, connect two OpenAI-compatible providers: `replica-gpu0` with the base URL `http://<host>/gpu0/v1` and `replica-gpu1` with `http://<host>/gpu1/v1`, both with the API key of the replicas. Each provider gets its own concurrency limit.
+2. On the **Models** page, create the model `Qwen3.8-27B` with the load-balance mode **Least busy**, add one endpoint per provider with the upstream model `Qwen3.8-27B`, and turn on **Session affinity**.
+
+With the management API:
+
+```bash
+curl https://hub.example.com/api/mgmt/models \
+  -H "Authorization: Bearer $LLMHUB_MGMT_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "alias": "Qwen3.8-27B",
+    "strategy": "least_inflight",
+    "session_affinity": true,
+    "deployments": [
+      {"provider_id": "<replica-gpu0 provider id>", "model": "Qwen3.8-27B"},
+      {"provider_id": "<replica-gpu1 provider id>", "model": "Qwen3.8-27B"}
+    ]
+  }'
+```
+
+For an existing model, send `PATCH /api/mgmt/models/<alias>` with `{"session_affinity": true}`. `GET /api/mgmt/models` shows the setting as `session_affinity`.
+
+The result: each agent conversation stays on its GPU, new conversations go to the less busy GPU, and when one GPU fails, the other takes over its conversations.
+
+### Check that it works
+
+- Responses from a model with session affinity carry the `x-llmhub-deployment` header with the ID of the deployment that served them.
+- The request detail in **Logs** shows the outcome (`hit`, `new`, `spill`, `failover`, or `off`) and the hashed session key. A conversation that mostly shows `hit` stays on its replica.
+- When conversations move too often or one replica stays much busier, change `SESSION_AFFINITY_SPILL_MARGIN` (see [Variables the app reads](#variables-the-app-reads)).
+
+### Limits
+
+- A compacted conversation starts over and may land on another replica.
+- Load is spread per conversation, not per request. A few very large conversations can make one replica busier than the other until they spill.
+- Without Redis, each LLM Hub process has its own assignments. With more than one LLM Hub replica, use Redis so they share them.
 
 ## Backup and restore
 

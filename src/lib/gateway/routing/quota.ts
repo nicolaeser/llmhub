@@ -4,6 +4,7 @@ const FULL_PERCENT = 100;
 const UNKNOWN_PRESSURE = 50;
 export const KICKOFF_RESET_GRACE_MS = 30_000;
 export const KICKOFF_IDLE_RETRY_MS = 60 * 60_000;
+export const KICKOFF_UNSTARTED_SLACK_MS = 2 * 60_000;
 
 function normalized(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -98,6 +99,23 @@ export function accountRecoveryAt(limits: SubscriptionLimits | null, now = Date.
   return Math.min(...resets);
 }
 
+function readTime(value: string | undefined): number {
+  return value ? Date.parse(value) : NaN;
+}
+
+function fullReadTime(limits: SubscriptionLimits): number {
+  const fetched = readTime(limits.fetchedAt);
+  const observed = readTime(limits.observedAt);
+  return Number.isFinite(observed) && observed > fetched ? NaN : fetched;
+}
+
+function notStarted(window: LimitWindow, reset: number, readAt: number): boolean {
+  if (window.scope || window.usedPercent !== 0 || window.limitReached) return false;
+  if (!Number.isFinite(reset)) return true;
+  if (!Number.isFinite(readAt) || window.windowSeconds <= 0) return false;
+  return reset - readAt >= window.windowSeconds * 1000 - KICKOFF_UNSTARTED_SLACK_MS;
+}
+
 export function windowKickoffDue(
   limits: SubscriptionLimits | null,
   model: string,
@@ -105,14 +123,15 @@ export function windowKickoffDue(
   now = Date.now(),
 ): boolean {
   if (!limits || quotaExhausted(limits, model, now)) return false;
+  const readAt = fullReadTime(limits);
   return limits.windows
     .filter((window) => applies(window, model))
     .some((window) => {
       const reset = window.resetsAt ? Date.parse(window.resetsAt) : NaN;
-      if (Number.isFinite(reset)) {
+      if (Number.isFinite(reset) && reset <= now) {
         return reset + KICKOFF_RESET_GRACE_MS <= now && (lastKickoff === null || lastKickoff < reset);
       }
-      const idle = !window.scope && window.usedPercent === 0 && !window.limitReached;
-      return idle && (lastKickoff === null || now - lastKickoff >= KICKOFF_IDLE_RETRY_MS);
+      if (!notStarted(window, reset, readAt)) return false;
+      return lastKickoff === null || now - lastKickoff >= KICKOFF_IDLE_RETRY_MS;
     });
 }

@@ -789,8 +789,10 @@ test("provider discovery in the console runs the shared refresh as the signed-in
   respondWith(() => modelsResponse(["openai/gpt-x", "anthropic/claude-x"]));
   const first = await runAsPrincipal(admin, () => discoverProvider(row.id));
   assert.deepEqual(first.models.map((candidate) => candidate.id), ["openai/gpt-x", "anthropic/claude-x"]);
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, "https://openrouter.ai/api/v1/models");
+  assert.deepEqual(
+    calls.map((call) => call.url),
+    ["https://openrouter.ai/api/v1/models", "https://openrouter.ai/api/v1/embeddings/models"],
+  );
   assert.equal((calls[0].init?.headers as Record<string, string>)["X-Title"], "LLM Hub");
   assert.equal((db.providers.get(row.id)!.discovered as DiscoveredModel[]).length, 2);
   assert.deepEqual(
@@ -798,7 +800,7 @@ test("provider discovery in the console runs the shared refresh as the signed-in
     [["provider.models_discovered", "admin-1"]],
   );
   await runAsPrincipal(admin, () => discoverProvider(row.id));
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 4);
   assert.equal(db.audit.length, 1);
 });
 
@@ -888,7 +890,7 @@ test("a provider task fetches only that provider and keeps the regular refresh s
   const result = await runModelSync({ task: "provider", providerId: second.id });
   assert.deepEqual(
     calls.map((call) => call.url),
-    ["https://second.example.test/v1/models"],
+    ["https://second.example.test/v1/models", "https://second.example.test/v1/embeddings/models"],
   );
   const after = JSON.parse(db.settings.get("model_catalog_state")!);
   assert.equal(after.refreshedAt, before.refreshedAt);
@@ -944,6 +946,7 @@ test("only plain catalog groups disappear with their last provider", async () =>
     fallbackGroups: [],
     autoRoutes: null,
     mergeSystemMessages: false,
+    sessionAffinity: false,
     _count: { priceWindows: 0 },
   };
   assert.deepEqual(
@@ -954,6 +957,7 @@ test("only plain catalog groups disappear with their last provider", async () =>
         { alias: "custom-price", ...plain, billingMode: "custom" },
         { alias: "pinned", ...plain, autoRoutes: true },
         { alias: "merged-system", ...plain, mergeSystemMessages: true },
+        { alias: "sticky-replicas", ...plain, sessionAffinity: true },
         { alias: "paused", ...plain, enabled: false },
         { alias: "with-fallback", ...plain, fallbackGroups: ["gpt-4o"] },
         { alias: "windowed", ...plain, _count: { priceWindows: 1 } },
@@ -1073,4 +1077,59 @@ test("a provider that turns new models on waits for Jev before routing a model J
     ],
   );
   assert.equal(db.entries.get(`${groq.id}|llama-3.3-70b-versatile`)?.source, "route");
+});
+
+test("OpenRouter discovery adds the models of its separate embeddings list", async () => {
+  const { refreshProviderModels } = await load();
+  const row = seedProvider([]);
+  respondWith((url) =>
+    url.endsWith("/embeddings/models")
+      ? modelsResponse(["openai/text-embedding-3-small", "openai/gpt-4o"], { "openai/text-embedding-3-small": "0.00000002" })
+      : modelsResponse(["openai/gpt-4o"]),
+  );
+  const { provider } = await refreshProviderModels(row, "worker");
+  assert.deepEqual(
+    calls.map((call) => call.url),
+    ["https://openrouter.ai/api/v1/models", "https://openrouter.ai/api/v1/embeddings/models"],
+  );
+  assert.equal((calls[1].init?.headers as Record<string, string>).Authorization, "Bearer sk-test");
+  const models = provider.discovered as DiscoveredModel[];
+  assert.deepEqual(models.map((item) => item.id), ["openai/gpt-4o", "openai/text-embedding-3-small"]);
+  assert.equal(models[1].costInputPer1k, 0.00002);
+});
+
+test("OpenRouter discovery keeps known embedding models when only the embeddings list fails", async () => {
+  const { refreshProviderModels } = await load();
+  const row = seedProvider([model("openai/gpt-4o"), model("openai/text-embedding-3-small"), model("openai/gpt-old")], {
+    kind: "openrouter_eu",
+    baseUrl: "https://eu.openrouter.ai/api/v1",
+  });
+  respondWith((url) =>
+    url.endsWith("/embeddings/models") ? new Response("{}", { status: 502 }) : modelsResponse(["openai/gpt-4o"]),
+  );
+  const { provider, diff } = await refreshProviderModels(row, "worker");
+  assert.equal(calls[1].url, "https://eu.openrouter.ai/api/v1/embeddings/models");
+  assert.deepEqual(
+    (provider.discovered as DiscoveredModel[]).map((item) => item.id),
+    ["openai/gpt-4o", "openai/text-embedding-3-small"],
+  );
+  assert.deepEqual(diff.removed, ["openai/gpt-old"]);
+});
+
+test("the catalog lists embedding models and labels each model family with its role", async () => {
+  const { refreshCatalog } = await import("@/lib/gateway/catalog/catalog-sync");
+  const { loadCatalogView } = await import("@/lib/gateway/catalog/catalog-view");
+  seedProvider([], { name: "OpenRouter" });
+  respondWith((url) =>
+    url.endsWith("/embeddings/models")
+      ? modelsResponse(["openai/text-embedding-3-small", "sentence-transformers/all-minilm-l6-v2"])
+      : modelsResponse(["openai/gpt-4o"]),
+  );
+  await refreshCatalog({ actor: "worker", force: true });
+  const roles = Object.fromEntries((await loadCatalogView()).families.map((family) => [family.family, family.role]));
+  assert.deepEqual(roles, {
+    "all-minilm-l6-v2": "embedding",
+    "gpt-4o": "chat",
+    "text-embedding-3-small": "embedding",
+  });
 });

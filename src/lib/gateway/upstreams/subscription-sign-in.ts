@@ -471,6 +471,15 @@ export async function antigravityAccount(access: string): Promise<{ project: str
   return { project, plan: antigravityPlan(tier.id) };
 }
 
+export async function antigravityPlanOf(access: string): Promise<string> {
+  try {
+    const loaded = await codeAssist(access, "loadCodeAssist", { metadata: { ideType: "ANTIGRAVITY" } });
+    return loaded.status >= 400 ? "" : antigravityPlan(antigravityTier(loaded.json).id);
+  } catch {
+    return "";
+  }
+}
+
 async function completeAntigravity(
   grant: Extract<DeviceGrant, { kind: "antigravity" }>,
   code: string,

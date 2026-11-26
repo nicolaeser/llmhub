@@ -16,24 +16,6 @@ export type CallableTool = {
   approved: boolean;
 };
 
-export type RpcMessage = { id: unknown; method: string; params: Record<string, unknown> };
-
-export function parseRpc(body: unknown): RpcMessage | { error: string } {
-  if (!body || typeof body !== "object" || Array.isArray(body)) return { error: "invalid_request" };
-  const rec = body as Record<string, unknown>;
-  if (rec.jsonrpc !== "2.0" || typeof rec.method !== "string") return { error: "invalid_request" };
-  const params = rec.params && typeof rec.params === "object" && !Array.isArray(rec.params) ? (rec.params as Record<string, unknown>) : {};
-  return { id: rec.id ?? null, method: rec.method, params };
-}
-
-export function rpcOk(id: unknown, result: unknown): Record<string, unknown> {
-  return { jsonrpc: "2.0", id, result };
-}
-
-export function rpcFail(id: unknown, code: number, message: string): Record<string, unknown> {
-  return { jsonrpc: "2.0", id, error: { code, message } };
-}
-
 export function visibleTools(tools: readonly CallableTool[], now: Date, environment: string): CallableTool[] {
   return tools.filter((tool) => authorizeTool(tool, {}, now, environment).decision === "allow");
 }

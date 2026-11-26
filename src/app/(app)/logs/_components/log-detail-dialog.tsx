@@ -17,6 +17,7 @@ import {
 import { Braces, ChevronDown, Download, FileCode, FileText, Play, Route, type LucideIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { loadAliasesAction } from "../_action";
+import AttachmentTile from "./attachment-tile";
 import Markdown from "./markdown";
 import CopyButton from "@/components/console/copy-button";
 import SearchSelect from "@/components/console/search-select";
@@ -31,6 +32,7 @@ import LabelChips from "./label-chips";
 import PiiChip from "./pii-chip";
 import { PiiCode, PiiPlaceholder } from "./pii-placeholder";
 import PiiRestore from "./pii-restore";
+import { shortId } from "./session-cells";
 import StatusChip from "./status-chip";
 
 const EXPORT_FORMATS: { id: RequestLogExportFormat; icon: LucideIcon }[] = [
@@ -72,7 +74,7 @@ function Entry({ entry, markdown }: { entry: TranscriptEntry; markdown: boolean 
         {heading ? <span className="text-xs text-muted">{heading}</span> : null}
       </div>
       {entry.kind === "media" ? (
-        <p className="text-sm text-muted">{t("media", { media: entry.text })}</p>
+        <AttachmentTile entry={entry} />
       ) : entry.kind === "tool_call" || entry.kind === "tool_result" ? (
         <PiiCode text={entry.text} />
       ) : entry.kind === "reasoning" ? (
@@ -401,6 +403,21 @@ export default function LogDetailDialog({
                         ? tDetail("upstreamValue", { provider: detail.provider, model: detail.upstreamModel })
                         : tCommon("none")}
                     </Field>
+                    {detail.affinity ? (
+                      <Field label={tDetail("affinity")}>
+                        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                          <span>{tDetail("affinityOutcome", { outcome: detail.affinity })}</span>
+                          {detail.affinityKey ? (
+                            <span className="flex min-w-0 items-center gap-1">
+                              <code title={detail.affinityKey} className="font-mono text-xs text-muted">
+                                {shortId(detail.affinityKey)}
+                              </code>
+                              <CopyButton text={detail.affinityKey} label={tDetail("copyAffinityKey")} />
+                            </span>
+                          ) : null}
+                        </span>
+                      </Field>
+                    ) : null}
                     <Field label={tDetail("tag")}>{detail.tag ? <PiiText text={detail.tag} /> : tCommon("none")}</Field>
                     <Field label={t("labels.title")} wide>
                       {detail.labels.length ? <LabelChips labels={detail.labels} /> : tCommon("none")}

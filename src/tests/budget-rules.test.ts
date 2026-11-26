@@ -54,8 +54,11 @@ test("headroom picks the tightest remaining budget in the chain", () => {
   assert.equal(headroom([link("user", 10, 25)])?.amount, 0);
 });
 
-test("meterColor escalates near and at the cap", () => {
+test("meterColor turns yellow from 80 percent and red from 95 percent", () => {
   assert.equal(meterColor(0.2), "accent");
+  assert.equal(meterColor(0.79), "accent");
   assert.equal(meterColor(0.8), "warning");
+  assert.equal(meterColor(0.94), "warning");
+  assert.equal(meterColor(0.95), "danger");
   assert.equal(meterColor(1), "danger");
 });

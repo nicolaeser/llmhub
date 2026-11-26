@@ -268,6 +268,7 @@ test("usage limit errors carry the reset time and park the route until then", as
     fallback_groups: [],
     deployments: [subscription, spare, apiKey],
     mapped: [subscription, spare, apiKey],
+    session_affinity: false,
   };
   const subscriptions = routable("subscription");
   const first = await acquireGroup(group, undefined, subscriptions);

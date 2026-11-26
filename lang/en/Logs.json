@@ -89,6 +89,9 @@
     "requestId": "Request ID",
     "upstream": "Upstream",
     "upstreamValue": "{provider} · {model}",
+    "affinity": "Session affinity",
+    "affinityOutcome": "{outcome, select, hit {Same endpoint as before} new {First request, endpoint pinned} spill {Pinned endpoint busy, sent elsewhere} failover {Pinned endpoint failed, switched} off {Not applied} other {{outcome}}}",
+    "copyAffinityKey": "Copy affinity key",
     "stream": "Streaming",
     "yesNo": "{value, select, true {Yes} other {No}}",
     "tag": "Tag",
@@ -145,7 +148,11 @@
     "caller": "Who sent it",
     "request": "Request",
     "copyId": "Copy request ID",
-    "replayTitle": "Send again"
+    "replayTitle": "Send again",
+    "attachmentAlt": "{media, select, image {Image} file {File} audio {Audio} other {Attachment}} from the request {name}",
+    "attachmentOpen": "Open {media, select, image {image} file {file} audio {audio} other {attachment}} in a new tab",
+    "attachmentDownload": "Download",
+    "attachmentMissing": "Not stored. Attachments are kept only while content logging and attachment storage are on, up to 10 MB each."
   },
   "sessions": {
     "title": "{agent, select, claude_code {Claude Code session} codex {Codex session} none {Agent session} other {{agent} session}}",
@@ -231,5 +238,21 @@
   },
   "export": "Export",
   "tokenFlow": "{prompt, number, integer} → {completion, number, integer} tokens",
-  "costLatency": "{cost} · {latency, number, integer} ms"
+  "costLatency": "{cost} · {latency, number, integer} ms",
+  "live": {
+    "status": "{connected, select, true {Live} other {Not live}}",
+    "runningTitle": "{count, plural, one {# request running} other {# requests running}}",
+    "runningHint": "Requests show here while the model answers and move into the log as soon as they finish.",
+    "runningFor": "Running for {duration}",
+    "streaming": "Streaming",
+    "unknownModel": "Unknown model",
+    "keyTitle": "{key, select, none {Key budget} other {Budget of {key}}}",
+    "keyHint": "How much of this API key's budget is used. Updates with every request.",
+    "keyMeter": "Key budget used",
+    "keySpent": "{spend, number, money} of {cap, number, money}",
+    "keyUsed": "{used, number, percent} used",
+    "keyLeft": "{left, number, money} left{resets, select, yes { · resets {at, date, zoned}} other {}}",
+    "keyNoCap": "{spend, number, money} spent · no budget set",
+    "keyHidden": "This key's budget is not visible to you, or the key was deleted."
+  }
 }

@@ -6,6 +6,42 @@ export type LogKind = "requests" | "sessions" | "spend" | "audit";
 
 export type NewLogsCount = { since: string; count: number; capped: boolean };
 
+export type RunningRequest = {
+  id: string;
+  startedAt: string;
+  model: string;
+  endpoint: string;
+  stream: boolean;
+  keyId: string;
+  agent: string;
+};
+
+export type RequestActivityKind = "start" | "finish" | "row";
+
+export type RequestActivity = {
+  kind: RequestActivityKind;
+  orgId: string;
+  userId: string;
+  keyId: string;
+  sessionId: string;
+};
+
+export type KeyBudgetUsage = {
+  keyId: string;
+  label: string;
+  spend: number;
+  maxBudget: number;
+  boost: number;
+  budgetDuration: string;
+  resetsAt: string | null;
+};
+
+export type LiveKeyUsage = { at: number; usage: KeyBudgetUsage | null };
+
+export type LiveLogRows = { rows: RequestLogRow[]; more: boolean };
+
+export type LiveRunning = { at: number; items: RunningRequest[] };
+
 export type LogFilterValues = {
   model: string;
   status: string;
@@ -23,11 +59,14 @@ export type ContentSkip = "" | "system" | "gateway" | "user" | "member" | "key";
 
 export type TranscriptKind = "text" | "reasoning" | "tool_call" | "tool_result" | "media";
 
+export type TranscriptAttachment = { id: string; contentType: string };
+
 export type TranscriptEntry = {
   role: string;
   kind: TranscriptKind;
   name?: string;
   url?: string;
+  attachment?: TranscriptAttachment;
   text: string;
 };
 
@@ -191,6 +230,8 @@ export type RequestLogDetail = RequestLogRow & {
   deploymentId: string;
   provider: string;
   upstreamModel: string;
+  affinity: string;
+  affinityKey: string;
   tag: string;
   error: string;
   piiRestore: PiiRestoreSummary | null;

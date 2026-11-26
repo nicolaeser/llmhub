@@ -6,6 +6,16 @@ export const KEY_PLACEHOLDER = "sk-hub-…";
 export const MODEL_PLACEHOLDER = "model-name";
 export const DESKTOP_CONFIG_FILE = "llmhub-claude-desktop.json";
 
+export const KEY_CHECK_CODES = [
+  "invalid_api_key",
+  "key_paused",
+  "ip_not_allowed",
+  "outside_access_window",
+  "endpoint_not_allowed",
+  "budget_exceeded",
+  "rate_limit_exceeded",
+] as const;
+
 export type ConnectGroup = "coding" | "apps" | "code" | "other";
 export type ConnectProtocol = "openai" | "anthropic" | "choice";
 export type ConnectShell = "posix" | "windows";
@@ -104,11 +114,11 @@ export function isLocalOrigin(origin: string): boolean {
   }
 }
 
-function json(value: unknown): string {
+export function json(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
-function envLines(vars: readonly (readonly [string, string])[], shell: ConnectShell): string {
+export function envLines(vars: readonly (readonly [string, string])[], shell: ConnectShell): string {
   return vars
     .map(([name, value]) => (shell === "windows" ? `$env:${name} = "${value}"` : `export ${name}="${value}"`))
     .join("\n");

@@ -58,5 +58,8 @@
   "tag": "{tag, select, free {Free} batch {Batch} thinking {Thinking} online {Online} extended {Extended} nitro {Nitro} floor {Floor} beta {Beta} other {{tag}}}",
   "tagFilter": "Variante",
   "tagOption": "{tag, select, all {Alle Varianten} standard {Standard} free {Free} batch {Batch} thinking {Thinking} online {Online} extended {Extended} nitro {Nitro} floor {Floor} beta {Beta} other {{tag}}}",
+  "role": "{role, select, chat {Chat} embedding {Embedding} rerank {Reranking} ocr {OCR} media {Medien} moderation {Moderation} redaction {Schwärzung} other {{role}}}",
+  "roleFilter": "Typ",
+  "roleOption": "{role, select, all {Alle Typen} chat {Chat} embedding {Embedding} rerank {Reranking} ocr {OCR} media {Medien} moderation {Moderation} redaction {Schwärzung} other {{role}}}",
   "autoRoutesMode": "{mode, select, inherit {Standard ({value, select, true {an} other {aus}})} on {An} other {Aus}}"
 }

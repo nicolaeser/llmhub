@@ -4,6 +4,7 @@ import { maintainContentStorage } from "@/lib/gateway/request-logs/content-stora
 import { purgeAuthRecords } from "@/lib/auth/cleanup";
 import { ATTEMPT_RETENTION_MS } from "@/lib/auth/throttle";
 import prisma from "@/lib/db/prisma";
+import { sweepExpiredHolds } from "@/lib/gateway/billing/budget-hold";
 import { fireAlert } from "@/lib/alerts/notify";
 import { runPendingBatches } from "@/lib/gateway/endpoints/batches";
 import { refreshDueLogins, syncLoginJournal } from "@/lib/gateway/upstreams/credentials";
@@ -26,6 +27,7 @@ import { runUsageReports } from "@/lib/reports/usage-report";
 import { revalidateSsoSessions } from "@/lib/auth/sso-sessions";
 import { reportWorkerJobFailure } from "@/lib/sentry/worker-jobs";
 import { runErrorRateAlerts, runKeyExpiryAlerts, runLatencyAlerts, runSpendAnomalyAlerts } from "./alert-checks";
+import { pruneOrphanAttachments } from "@/lib/gateway/request-logs/attachment-store";
 import { retentionCutoff } from "./retention";
 import { contentStoragePolicy, runRetentionSweep } from "./retention-sweep";
 import { archiveRetentionHolds } from "@/lib/compliance-archive/holds";
@@ -75,7 +77,7 @@ export async function runMaintenanceSweep(
 ): Promise<MaintenanceSweepResult> {
   const startedAt = Date.now();
   const attemptCutoff = new Date(now.getTime() - ATTEMPT_RETENTION_MS);
-  const [sessions, resetTokens, loginAttempts, tempBudgets, rotatedKeys] =
+  const [sessions, resetTokens, loginAttempts, tempBudgets, budgetHolds, rotatedKeys] =
     await Promise.all([
       prisma.session.deleteMany({ where: { expiresAt: { lt: now } } }),
       prisma.passwordResetToken.deleteMany({
@@ -87,6 +89,7 @@ export async function runMaintenanceSweep(
         where: { createdAt: { lt: attemptCutoff } },
       }),
       prisma.tempBudget.deleteMany({ where: { until: { lt: now } } }),
+      sweepExpiredHolds(now),
       prisma.virtualKey.updateMany({
         where: { prevHashUntil: { not: null, lt: now } },
         data: { prevHash: "", prevHashUntil: null },
@@ -99,6 +102,7 @@ export async function runMaintenanceSweep(
     resetTokens: resetTokens.count,
     loginAttempts: loginAttempts.count,
     tempBudgets: tempBudgets.count,
+    budgetHolds,
     rotatedKeys: rotatedKeys.count,
     requestLogs: 0,
     requestContents: 0,
@@ -148,6 +152,7 @@ export async function runMaintenanceSweep(
   result.batches = await runSweepJob("batches", () => runPendingBatches());
   result.vectorStores = await runSweepJob("vector_stores", () => expireVectorStores(now));
   result.storedObjects += await runSweepJob("orphan_uploads", () => purgeOrphanUploads(now));
+  result.storedObjects += await runSweepJob("log_attachments", () => pruneOrphanAttachments(now));
   result.vectorFiles = await runSweepJob("vector_ingests", () => runPendingIngests());
   await runSweepJob("spend_resets", () => runSpendResets(now));
   await runSweepJob("budget_alerts", () => runBudgetAlerts());

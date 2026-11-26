@@ -32,6 +32,7 @@ import { useActionData } from "@/lib/hooks/use-action-data";
 import { useClock } from "@/lib/hooks/use-clock";
 import { isActionFail } from "@/lib/http/action-result";
 import { catalogEntryKey } from "@/lib/gateway/catalog/model-catalog";
+import { MODEL_ROLES } from "@/lib/models/model-role";
 import type { ActionFail } from "@/types/actions";
 import type { CatalogEntryView, CatalogFamilyView, CatalogGroupView, CatalogView } from "@/types/model-catalog";
 import AssignDialog from "./assign-dialog";
@@ -45,6 +46,7 @@ type Filter = (typeof FILTERS)[number];
 
 const STANDARD_TAG = "standard";
 const ALL_TAGS = "all";
+const ALL_ROLES = "all";
 
 function matchesFilter(group: CatalogGroupView, filter: Filter): boolean {
   if (filter === "all") return true;
@@ -59,13 +61,14 @@ function matchesTag(group: CatalogGroupView, tag: string): boolean {
 
 function matchesQuery(family: CatalogFamilyView, group: CatalogGroupView, query: string): boolean {
   if (!query) return true;
-  return [family.family, group.alias, group.vendor, group.displayName]
+  return [family.family, family.role, group.alias, group.vendor, group.displayName]
     .concat(group.entries.flatMap((entry) => [entry.upstreamId, entry.providerName]))
     .some((value) => value.toLowerCase().includes(query));
 }
 
-function visibleFamilies(families: CatalogFamilyView[], filter: Filter, tag: string, query: string) {
+function visibleFamilies(families: CatalogFamilyView[], filter: Filter, tag: string, role: string, query: string) {
   return families.flatMap((family) => {
+    if (role !== ALL_ROLES && family.role !== role) return [];
     const variants = family.variants.filter(
       (group) => matchesFilter(group, filter) && matchesTag(group, tag) && matchesQuery(family, group, query),
     );
@@ -82,6 +85,7 @@ export default function CatalogTab() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [tag, setTag] = useState(ALL_TAGS);
+  const [role, setRole] = useState(ALL_ROLES);
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [busy, setBusy] = useState<string | null>(null);
   const [assigning, setAssigning] = useState<{ entry: CatalogEntryView; alias: string } | null>(null);
@@ -128,7 +132,8 @@ export default function CatalogTab() {
   const state = view.state;
   const hours = view.refreshMs / HOUR_MS;
   const needle = query.trim().toLowerCase();
-  const visible = visibleFamilies(view.families, filter, tag, needle);
+  const visible = visibleFamilies(view.families, filter, tag, role, needle);
+  const roles = MODEL_ROLES.filter((option) => view.families.some((family) => family.role === option));
   const shown = visible.slice(0, limit);
   const aliases = view.families.flatMap((family) => family.variants);
   const activeCount = aliases.filter((group) => group.state === "active").length;
@@ -298,6 +303,18 @@ export default function CatalogTab() {
                 value={tag}
                 onChange={(key) => {
                   setTag(key);
+                  setLimit(PAGE_SIZE);
+                }}
+                className="w-full sm:w-56"
+              />
+            ) : null}
+            {roles.length > 1 ? (
+              <SearchSelect
+                label={t("roleFilter")}
+                items={[ALL_ROLES, ...roles].map((option) => ({ id: option, label: t("roleOption", { role: option }) }))}
+                value={role}
+                onChange={(key) => {
+                  setRole(key);
                   setLimit(PAGE_SIZE);
                 }}
                 className="w-full sm:w-56"

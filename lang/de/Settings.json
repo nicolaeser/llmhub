@@ -289,7 +289,9 @@
       "recipientsHint": "E-Mail-Adressen, eine pro Zeile oder durch Kommas getrennt. Höchstens {max, number, integer}.",
       "recipientsInvalid": "Prüfe {list}.",
       "recipientsTooMany": "Gib höchstens {max, number, integer} Adressen ein."
-    }
+    },
+    "attachments": "Bilder und Anhänge speichern",
+    "attachmentsHint": "Behält eingebettete Bilder, PDFs und Audio aus Anfragen und Antworten (bis 10 MB pro Anhang), damit Protokoll und Sitzungs-Chat sie anzeigen. Dasselbe Bild wird für alle Anfragen, die es erneut senden, nur einmal gespeichert. Die PII-Schwärzung kann Bilder nicht maskieren; ein Screenshot zeigt also alles, was darauf zu sehen ist. Anhänge folgen der Aufbewahrung der Inhalte und zählen zur maximalen Größe der Inhalte."
   },
   "archive": {
     "description": "Kopiert Request-Logs und weitere Aufzeichnungen einmal täglich in den Objektspeicher, für Prüfungen und Aufbewahrungspflichten. Solange das Archiv an ist, löscht die Datenbank-Aufbewahrung nur Tage, die bereits archiviert sind.",

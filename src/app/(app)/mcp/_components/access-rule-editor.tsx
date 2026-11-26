@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import { Button, Chip, Separator } from "@heroui/react";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import SearchSelect from "@/components/console/search-select";
 import AccessLevelField from "@/components/mcp/access-level-field";
 import { useAccessLabels } from "@/components/mcp/access-labels";
 import ToolAccessList from "@/components/mcp/tool-access-list";
-import type { McpAssignmentView, McpCeiling, McpRuleAccess, McpTargetOptions, McpToolSpec } from "@/types/mcp";
+import type { McpAssignmentView, McpCeiling, McpTargetOptions, McpToolSpec } from "@/types/mcp";
 import type { AssignmentScope } from "@/types/providers";
 import { ScopeSelect } from "./access-fields";
 import { newRule, ruleKey } from "./access-view";
@@ -40,14 +40,12 @@ export function AddRuleView({
 }) {
   const t = useTranslations("Mcp.assign");
   const [scope, setScope] = useState<AssignmentScope>(defaultScope);
-  const [target, setTarget] = useState("");
-  const [access, setAccess] = useState<McpRuleAccess>("read");
   const taken = new Set(rules.map(ruleKey));
   const candidates = options[scope].filter((item) => !taken.has(ruleKey({ scope, id: item.id })));
 
-  function add() {
-    const option = options[scope].find((item) => item.id === target);
-    if (option) onAdd(newRule(scope, option, access));
+  function choose(id: string) {
+    const option = options[scope].find((item) => item.id === id);
+    if (option) onAdd(newRule(scope, option, "read"));
   }
 
   return (
@@ -58,29 +56,15 @@ export function AddRuleView({
         <p className="text-sm text-muted">{t("newRuleHint")}</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-[10rem_1fr]">
-        <ScopeSelect
-          value={scope}
-          onChange={(next) => {
-            setScope(next);
-            setTarget("");
-          }}
-          isDisabled={pending}
-        />
+        <ScopeSelect value={scope} onChange={setScope} isDisabled={pending} />
         <SearchSelect
           label={t("target")}
           placeholder={t("targetPlaceholder", { scope })}
           items={candidates}
-          value={target}
-          onChange={setTarget}
+          value=""
+          onChange={choose}
           isDisabled={pending}
         />
-      </div>
-      <AccessLevelField value={access} onChange={setAccess} context="rule" isDisabled={pending} />
-      <div className="flex flex-wrap justify-end gap-2">
-        <Button variant="secondary" onPress={add} isDisabled={pending || !target}>
-          <Plus size={14} aria-hidden />
-          {t("add")}
-        </Button>
       </div>
     </div>
   );

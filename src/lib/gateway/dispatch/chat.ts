@@ -19,6 +19,7 @@ import { promptCacheHeaders } from "@/lib/gateway/upstreams/prompt-cache";
 import { accessOf } from "@/lib/gateway/routing/account-access";
 import { apiFallbackKinds } from "@/lib/gateway/routing/account-routing";
 import { pinsAccounts, runSession, writePin } from "@/lib/gateway/routing/account-affinity";
+import { noteServed, runAffinity } from "@/lib/gateway/routing/deployment-affinity";
 import {
   dropAccountReasoning,
   historyLength,
@@ -321,7 +322,12 @@ export async function withDeployment<T>(
   const access = accessOf(opts?.principal);
   const request = opts?.request ?? null;
   const tracksHealth = opts?.health !== false;
-  const run: RunRouting = { session: runSession(request, opts?.headers), tried: new Set(), signal: opts?.signal };
+  const run: RunRouting = {
+    session: runSession(request, opts?.headers),
+    tried: new Set(),
+    signal: opts?.signal,
+    affinity: runAffinity(opts?.principal, request, opts?.headers),
+  };
   const renewed = new Set<string>();
   const context =
     opts?.fitContext && request
@@ -402,6 +408,7 @@ export async function withDeployment<T>(
           upstreamTried = true;
           const result = await fn(acquired.dep, group);
           if (tracksHealth) markSuccess(acquired.dep, Date.now() - started);
+          noteServed(opts?.principal?.trace, acquired.dep, acquired.affinity);
           const pinTo = pinnedAccount(acquired.dep);
           if (pinTo && run.session && !acquired.pinHeld) {
             void settleRunPin(acquired.dep.provider!.kind, run.session, pinTo, acquired.pinned, switched, request);
@@ -419,6 +426,7 @@ export async function withDeployment<T>(
           };
         } catch (err) {
           acquired.release();
+          run.affinity?.failed.add(acquired.dep.id);
           if (opts?.signal?.aborted) throw clientClosedError();
           if (account && unauthorized(err) && !renewed.has(account)) {
             renewed.add(account);

@@ -89,6 +89,9 @@
     "requestId": "Anfrage-ID",
     "upstream": "Upstream",
     "upstreamValue": "{provider} · {model}",
+    "affinity": "Sitzungsbindung",
+    "affinityOutcome": "{outcome, select, hit {Gleicher Endpunkt wie zuvor} new {Erste Anfrage, Endpunkt festgelegt} spill {Festgelegter Endpunkt ausgelastet, anderswohin geleitet} failover {Festgelegter Endpunkt fehlgeschlagen, gewechselt} off {Nicht angewendet} other {{outcome}}}",
+    "copyAffinityKey": "Bindungsschlüssel kopieren",
     "stream": "Streaming",
     "yesNo": "{value, select, true {Ja} other {Nein}}",
     "tag": "Tag",
@@ -145,7 +148,11 @@
     "caller": "Wer sie gesendet hat",
     "request": "Anfrage",
     "copyId": "Anfrage-ID kopieren",
-    "replayTitle": "Erneut senden"
+    "replayTitle": "Erneut senden",
+    "attachmentAlt": "{media, select, image {Bild} file {Datei} audio {Audio} other {Anhang}} aus der Anfrage {name}",
+    "attachmentOpen": "{media, select, image {Bild} file {Datei} audio {Audio} other {Anhang}} in neuem Tab öffnen",
+    "attachmentDownload": "Herunterladen",
+    "attachmentMissing": "Nicht gespeichert. Anhänge werden nur aufbewahrt, solange Inhaltsprotokollierung und Anhangspeicherung aktiv sind, bis 10 MB pro Anhang."
   },
   "sessions": {
     "title": "{agent, select, claude_code {Claude-Code-Sitzung} codex {Codex-Sitzung} none {Agent-Sitzung} other {Sitzung von {agent}}}",
@@ -231,5 +238,21 @@
   },
   "export": "Exportieren",
   "tokenFlow": "{prompt, number, integer} → {completion, number, integer} Tokens",
-  "costLatency": "{cost} · {latency, number, integer} ms"
+  "costLatency": "{cost} · {latency, number, integer} ms",
+  "live": {
+    "status": "{connected, select, true {Live} other {Nicht live}}",
+    "runningTitle": "{count, plural, one {# Anfrage läuft} other {# Anfragen laufen}}",
+    "runningHint": "Anfragen erscheinen hier, während das Modell antwortet, und wandern ins Protokoll, sobald sie fertig sind.",
+    "runningFor": "Läuft seit {duration}",
+    "streaming": "Streaming",
+    "unknownModel": "Unbekanntes Modell",
+    "keyTitle": "{key, select, none {Budget des API-Keys} other {Budget von {key}}}",
+    "keyHint": "Wie viel vom Budget dieses API-Keys verbraucht ist. Aktualisiert sich mit jeder Anfrage.",
+    "keyMeter": "Verbrauchtes Budget des API-Keys",
+    "keySpent": "{spend, number, money} von {cap, number, money}",
+    "keyUsed": "{used, number, percent} genutzt",
+    "keyLeft": "Noch {left, number, money}{resets, select, yes { · setzt zurück am {at, date, zoned}} other {}}",
+    "keyNoCap": "{spend, number, money} ausgegeben · kein Budget festgelegt",
+    "keyHidden": "Das Budget dieses API-Keys ist für dich nicht sichtbar oder der Key wurde gelöscht."
+  }
 }

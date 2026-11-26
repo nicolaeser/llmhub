@@ -4,6 +4,7 @@ import { storedSelect, type StoredRow } from "@/lib/gateway/catalog/catalog-entr
 import { CATALOG_REFRESH_MS, getCatalogState, jevErrorOutdated } from "@/lib/gateway/catalog/catalog-state";
 import { jevRoute } from "@/lib/gateway/catalog/jev";
 import { catalogStatus, splitTag, trustedKind } from "@/lib/gateway/catalog/model-catalog";
+import { modelRole } from "@/lib/models/model-role";
 import { catalogRouting, getEnterprise } from "@/lib/settings/enterprise";
 import type {
   CatalogEntryView,
@@ -48,6 +49,11 @@ function familiesOf(groups: CatalogGroupView[]): CatalogFamilyView[] {
       family,
       vendor: variants.find((variant) => variant.vendor)?.vendor ?? "",
       displayName: lead.tag ? "" : lead.displayName,
+      role: modelRole([
+        ...variants.flatMap((variant) => variant.entries.map((entry) => entry.upstreamId)),
+        family,
+        ...variants.map((variant) => variant.displayName),
+      ]),
       variants,
     };
   });

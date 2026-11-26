@@ -604,3 +604,47 @@ test("tool specs drop invalid and duplicate tools and force object schemas", () 
     ],
   );
 });
+
+test("MCP servers with a key or token in the address get it on every call to their own origin only", async () => {
+  const { seal } = await import("@/lib/crypto");
+  const { withQueryAuth } = await import("@/lib/mcp/auth");
+  const { mcpClientFor, serverRecord } = await import("@/lib/mcp/toolset");
+  const record = serverRecord({
+    id: "s1",
+    name: "desk",
+    url: "https://mcp.test/mcp?team=7",
+    authType: "query",
+    authHeader: "token",
+    authSecret: seal("t0k&n-SECRET"),
+    internal: false,
+    oauthGrant: "",
+    oauthClientId: "",
+    oauthScopes: "",
+    transport: "",
+    protocolVersion: "",
+  });
+  const server = modernServer();
+  const client = mcpClientFor(record, server.fetch);
+  assert.equal(await client.discover(), "Weather");
+  assert.equal((await client.listTools()).length, 2);
+  assert.ok(server.seen.length >= 2);
+  for (const call of server.seen) {
+    const sent = new URL(call.url);
+    assert.equal(sent.searchParams.get("token"), "t0k&n-SECRET");
+    assert.equal(sent.searchParams.get("team"), "7");
+    assert.equal(call.headers.Authorization, undefined);
+  }
+  assert.equal(record.url, "https://mcp.test/mcp?team=7");
+
+  const urls: string[] = [];
+  const spy: McpFetch = async (url) => {
+    urls.push(url);
+    return new Response(null, { status: 204 });
+  };
+  const keyed = withQueryAuth(spy, record);
+  await keyed("https://mcp.test/messages?session=1", { method: "POST", headers: {}, signal: AbortSignal.timeout(1000) });
+  await keyed("https://elsewhere.test/hook", { method: "POST", headers: {}, signal: AbortSignal.timeout(1000) });
+  assert.deepEqual(urls, ["https://mcp.test/messages?session=1&token=t0k%26n-SECRET", "https://elsewhere.test/hook"]);
+  assert.equal(withQueryAuth(spy, { ...record, authSecret: "" }), spy);
+  assert.equal(withQueryAuth(spy, { ...record, authType: "bearer" }), spy);
+});

@@ -1,14 +1,11 @@
 "use client";
 
-import { useCallback, useMemo, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Alert, Button, Card, Chip, Disclosure, Separator } from "@heroui/react";
 import {
   ArrowDown,
   Brain,
   FileText,
-  Image as ImageGlyph,
-  Music,
-  Paperclip,
   RefreshCw,
   ScrollText,
   Wrench,
@@ -23,15 +20,18 @@ import { isActionFail } from "@/lib/http/action-result";
 import { cacheHitRate } from "@/lib/usage/usage-stats";
 import type { LogChatRequest, LogChatThread, LogChatTurn, LogSessionRef, TranscriptEntry } from "@/types/logs";
 import { loadLogSessionChatAction } from "../_action";
+import AttachmentTile from "./attachment-tile";
 import Markdown from "./markdown";
 import { PiiCode } from "./pii-placeholder";
 import IconTile from "@/components/console/icon-tile";
+import RunningRequests from "./running-requests";
 import { agentIcon, useCompactTokens } from "./session-cells";
 import { useLiveReload } from "./use-live-reload";
+import type { LogStream } from "./use-log-stream";
 
 const CLIENT_CLOSED = 499;
+const FOLLOW_SLACK_PX = 240;
 const PREVIEW_CHARS = 80;
-const MEDIA_ICONS: Record<string, LucideIcon> = { image: ImageGlyph, audio: Music, file: FileText };
 
 type Item =
   | { type: "resent"; key: string; request: LogChatRequest }
@@ -111,34 +111,10 @@ function Fold({
   );
 }
 
-function Attachment({ entry }: { entry: TranscriptEntry }) {
-  const t = useTranslations("Logs.detail");
-  const Icon = MEDIA_ICONS[entry.text] ?? Paperclip;
-  return (
-    <Card variant="tertiary" className="w-fit max-w-full gap-0 px-3 py-2">
-      <div className="flex min-w-0 items-center gap-2 text-sm">
-        <Icon size={16} aria-hidden className="shrink-0 text-accent" />
-        <span className="font-medium text-foreground">{t("media", { media: entry.text })}</span>
-        {entry.name ? <span className="min-w-0 truncate font-mono text-xs text-muted">{entry.name}</span> : null}
-      </div>
-      {entry.url ? (
-        <a
-          href={entry.url}
-          target="_blank"
-          rel="noopener noreferrer nofollow"
-          className="mt-1 block text-xs break-all text-accent underline underline-offset-2"
-        >
-          {entry.url}
-        </a>
-      ) : null}
-    </Card>
-  );
-}
-
 function EntryView({ entry }: { entry: TranscriptEntry }) {
   const t = useTranslations("Logs.detail");
   const tChat = useTranslations("Logs.chat");
-  if (entry.kind === "media") return <Attachment entry={entry} />;
+  if (entry.kind === "media") return <AttachmentTile entry={entry} />;
   if (entry.kind === "tool_call") {
     return (
       <Fold icon={Wrench} label={tChat("toolCall")} chip={entry.name || undefined}>
@@ -275,26 +251,38 @@ export default function SessionChat({
   sessionRef,
   agent,
   active,
+  stream,
   onOpenRequest,
 }: {
   sessionRef: LogSessionRef;
   agent: string;
   active: boolean;
+  stream: LogStream;
   onOpenRequest: (id: string) => void;
 }) {
   const t = useTranslations("Logs.chat");
   const tDetail = useTranslations("Logs.detail");
   const tSessions = useTranslations("Logs.sessions");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const follow = useRef(false);
   const state = useActionData(() => loadLogSessionChatAction({ ref: sessionRef }));
   const { data, pending, setData } = state;
 
   const refresh = useCallback(() => {
     loadLogSessionChatAction({ ref: sessionRef }).then((res) => {
-      if (!isActionFail(res)) setData(res);
+      if (isActionFail(res)) return;
+      const bottom = bottomRef.current?.getBoundingClientRect().top;
+      follow.current = bottom !== undefined && bottom <= window.innerHeight + FOLLOW_SLACK_PX;
+      setData(res);
     });
   }, [sessionRef, setData]);
-  useLiveReload(active && !pending, refresh);
+  useLiveReload(!pending, stream, refresh, active);
+
+  useEffect(() => {
+    if (!follow.current) return;
+    follow.current = false;
+    bottomRef.current?.scrollIntoView({ block: "end" });
+  }, [data]);
 
   if (!data) {
     return state.error ? <LoadError state={state} /> : <SectionLoading shape="details" />;
@@ -312,7 +300,12 @@ export default function SessionChat({
   }
 
   if (!data.threads.length) {
-    return <EmptyState icon={MessagesSquare} title={t("empty")} description={t("emptyHint")} />;
+    return (
+      <div className="space-y-4">
+        <RunningRequests items={stream.running} />
+        <EmptyState icon={MessagesSquare} title={t("empty")} description={t("emptyHint")} />
+      </div>
+    );
   }
 
   const ordered = [...data.threads].sort((a, b) => b.turns.length - a.turns.length);
@@ -337,6 +330,7 @@ export default function SessionChat({
         </Alert>
       ) : null}
       <Thread thread={main!} agent={agent} onOpen={onOpenRequest} />
+      <RunningRequests items={stream.running} />
       {side.length ? (
         <section className="space-y-3" aria-label={t("sideTitle", { count: side.length })}>
           <Separator />

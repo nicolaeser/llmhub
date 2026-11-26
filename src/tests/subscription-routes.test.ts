@@ -453,6 +453,36 @@ test("model lists show each model once, keep variants beside it, and leave addit
   );
 });
 
+test("the API model list carries embedding models for keys allowed to use them, gateway discovery leaves them out", async () => {
+  const { gatewayDiscoveryEntries, modelEntries } = await import("@/lib/gateway/endpoints/models-route");
+  const created = new Date("2026-11-25T12:00:00Z");
+  const model = (alias: string): PublicModel => ({
+    alias,
+    vendor: "",
+    displayName: "",
+    tags: [],
+    pricing: { prompt: "0.00000002", completion: "0" },
+    subscriptionPricing: null,
+    pools: ["api"],
+    variants: [],
+    extraNames: [],
+  });
+  const models = [model("gpt-4o"), model("text-embedding-3-small"), model("gemini-embedding-001")];
+  const listed = modelEntries(models, "api", () => true, created);
+  assert.deepEqual(
+    listed.map((entry) => entry.id),
+    ["gpt-4o", "text-embedding-3-small", "gemini-embedding-001"],
+  );
+  assert.deepEqual(
+    modelEntries(models, "api", (alias) => alias !== "gemini-embedding-001", created).map((entry) => entry.id),
+    ["gpt-4o", "text-embedding-3-small"],
+  );
+  assert.deepEqual(
+    gatewayDiscoveryEntries(listed).map((entry) => entry.id),
+    ["anthropic/gpt-4o"],
+  );
+});
+
 test("a model served by both pools is priced per pool", async () => {
   const { pricedModels } = await import("@/lib/gateway/catalog/model-pricing");
   const row = groupRow("priced-mixed", [{ id: "p-sub", kind: "codex" }, { id: "p-api", kind: "openai" }]);

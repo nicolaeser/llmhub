@@ -27,6 +27,7 @@ export default function BudgetCard({
   onBoost: () => void;
 }) {
   const t = useTranslations("Companies.budget");
+  const tBudgets = useTranslations("Budgets");
   const format = useFormatter();
   const now = useClock(60_000);
   const ratio = budgetRatio(budget);
@@ -105,6 +106,15 @@ export default function BudgetCard({
             </dd>
           </div>
         </dl>
+        {capped ? (
+          <p className="text-sm text-muted">
+            {tBudgets("enforcementSummary", {
+              mode: budget.budgetMode,
+              capped: budget.overrunPct != null ? "yes" : "no",
+              overrun: budget.overrunPct ?? 0,
+            })}
+          </p>
+        ) : null}
         {budget.daysToExhaust != null ? (
           <p className="text-sm text-muted">
             {t("exhausts", { days: Math.max(0, Math.ceil(budget.daysToExhaust)) })}

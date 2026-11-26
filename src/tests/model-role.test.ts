@@ -9,6 +9,11 @@ test("model names map to the endpoint they can actually serve", () => {
   assert.equal(modelRole(["e5-large"]), "embedding");
   assert.equal(modelRole(["voyage-3"]), "embedding");
   assert.equal(modelRole(["nomic-embed-text"]), "embedding");
+  assert.equal(modelRole(["sentence-transformers/all-minilm-l6-v2"]), "embedding");
+  assert.equal(modelRole(["sentence-transformers/multi-qa-mpnet-base-dot-v1"]), "embedding");
+  assert.equal(modelRole(["mongodb/voyage-4-lite"]), "embedding");
+  assert.equal(modelRole(["intfloat/multilingual-e5-large"]), "embedding");
+  assert.equal(modelRole(["thenlper/gte-base"]), "embedding");
   assert.equal(modelRole(["cohere-rerank-v3"]), "rerank");
   assert.equal(modelRole(["jina-reranker-v2"]), "rerank");
   assert.equal(modelRole(["mistral-ocr-2505"]), "ocr");

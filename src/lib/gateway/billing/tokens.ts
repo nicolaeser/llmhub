@@ -3,7 +3,7 @@ import { isOpaqueText } from "@/lib/gateway/safety/pii";
 import type { JsonMap } from "@/types/gateway";
 import type { ContextDemand } from "@/types/routing";
 
-const OUTPUT_LIMIT_KEYS = ["max_tokens", "max_completion_tokens", "max_output_tokens"] as const;
+export const OUTPUT_LIMIT_KEYS = ["max_tokens", "max_completion_tokens", "max_output_tokens"] as const;
 const NON_PROMPT_KEYS: ReadonlySet<string> = new Set([
   "model",
   "user",
@@ -34,6 +34,13 @@ export function tokensForLength(length: number): number {
 
 export function estimateTokens(text: string): number {
   return tokensForLength(text.length);
+}
+
+export function embeddingInputTokens(input: unknown): number {
+  if (typeof input === "string") return estimateTokens(input);
+  if (!Array.isArray(input)) return tokensForLength(promptLength(input));
+  if (input.length > 0 && input.every((item) => typeof item === "number")) return input.length;
+  return input.reduce((sum: number, item) => sum + embeddingInputTokens(item), 0);
 }
 
 export function requestText(body: JsonMap): string {

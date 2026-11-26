@@ -1,13 +1,13 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
-import { hostedAuth, mcpAuthFor, mcpCapabilities } from "@/lib/mcp/auth";
-import { McpClient, toolSpecs } from "@/lib/mcp/client";
+import { hostedAuth, mcpAuthFor, mcpCapabilities, withQueryAuth } from "@/lib/mcp/auth";
+import { MCP_REQUEST_TIMEOUT_MS, McpClient, toolSpecs } from "@/lib/mcp/client";
 import { callHosted, hostedSpec } from "@/lib/mcp/hosted";
-import { callMedia, mediaSpec } from "@/lib/mcp/media";
+import { callMedia, MEDIA_TOOL_TIMEOUT_MS, mediaSpec } from "@/lib/mcp/media";
 import { chainOf, classifyTools, defaultAccessOf, effectiveServers, ruleAccessOf, toolActionsOf } from "@/lib/mcp/resolve";
 import { HUB_TOOL_PREFIX, bindTools } from "@/lib/mcp/tool-names";
 import { guardedFetch } from "@/lib/mcp/transport";
-import { MCP_STATIC_AUTH_TYPES, authUsesName } from "@/schemas/mcp";
+import { MCP_STATIC_AUTH_TYPES, installedAuthName } from "@/schemas/mcp";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import type { Principal } from "@/types/gateway";
@@ -105,7 +105,7 @@ export function mcpClientFor(
 ): McpClient {
   return new McpClient({
     url: record.url,
-    fetch,
+    fetch: withQueryAuth(fetch, record),
     auth: options.auth ?? mcpAuthFor(record, fetch),
     connection: connectionOf(record),
     capabilities: mcpCapabilities(record),
@@ -216,7 +216,7 @@ export async function loadMcpServers(chain: McpChain) {
       ...record,
       url: installation.baseUrl || record.url,
       authType,
-      authHeader: authUsesName(authType) ? installation.authHeader : "",
+      authHeader: installedAuthName(authType, installation.authHeader, row),
       authSecret: installation.authSecret,
     });
     return true;
@@ -248,11 +248,14 @@ export function createExecutor(
     async call(bound, args, signal) {
       const record = records.get(bound.serverId);
       if (!record) return { text: "This tool is no longer available.", isError: true };
-      if (record.kind === "media") return callMedia(record.media, bound.tool.name, args, principal);
+      if (record.kind === "media") return callMedia(record.media, bound.tool.name, args, principal, fetchFor(false), signal);
       if (record.kind === "hosted") {
         return callHosted(record.url, record.internal, record.spec, bound.tool.name, args, signal, fetchFor(record.internal), hostedAuth(record));
       }
       return session(record).callTool(bound.tool.name, args, signal, bound.tool.inputSchema);
+    },
+    timeoutMs(bound) {
+      return records.get(bound.serverId)?.kind === "media" ? MEDIA_TOOL_TIMEOUT_MS : MCP_REQUEST_TIMEOUT_MS;
     },
     async close() {
       const open = [...sessions.entries()];

@@ -69,7 +69,7 @@ export function vertexModelRoute(model: string): VertexModelRoute {
 
 export function vertexVendor(model: string): string {
   const { route, model: id } = vertexModelRoute(model);
-  if (route === "google") return /^(?:gemini|gemma|imagen)/i.test(id) ? "google" : "";
+  if (route === "google") return /^(?:gemini|gemma|imagen|text-embedding-|text-multilingual-embedding-)/i.test(id) ? "google" : "";
   if (route === "anthropic") return "anthropic";
   return id.slice(0, id.indexOf("/"));
 }

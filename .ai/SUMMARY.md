@@ -12,6 +12,7 @@ Load `BASE.md` first. Then open only the documents below that match the task.
 
 - [knowledge/system-overview.md](knowledge/system-overview.md) — Process split, worker jobs, route groups, and product vocabulary (companies, departments, people, console users, budgets, model templates); load when work crosses console, gateway, or boot.
 - [knowledge/pitfalls.md](knowledge/pitfalls.md) — Verified traps and stale paths; load when debugging surprises or conflicting docs.
+- [knowledge/session-affinity.md](knowledge/session-affinity.md) — Why and how model groups pin conversations to one deployment (key order, fingerprint, pin store, `acquireGroup` outcomes, log fields); load when changing deployment selection, pins, or the fingerprint, or debugging replica cache misses.
 - [knowledge/next-intl-icu.md](knowledge/next-intl-icu.md) — ICU messages, formatters, and anti-patterns for next-intl; load when changing strings, counts, dates, money, or lists.
 
 ## Instructions

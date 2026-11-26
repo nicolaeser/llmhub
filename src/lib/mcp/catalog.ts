@@ -10,7 +10,7 @@ import { toolActionsOf } from "@/lib/mcp/resolve";
 import { mcpAccess, requireMcpManager } from "@/lib/mcp/scope";
 import { installedAuthType } from "@/lib/mcp/toolset";
 import { checkServerUrl } from "@/lib/mcp/url-guard";
-import { authUsesName, mcpInstallationSchema, mcpPermissionsSchema, mcpTemplateSchema } from "@/schemas/mcp";
+import { authNameValid, authUsesName, installedAuthName, mcpInstallationSchema, mcpPermissionsSchema, mcpTemplateSchema } from "@/schemas/mcp";
 import type { McpInstallationView } from "@/types/mcp";
 
 function parse<T>(schema: { safeParse(value: unknown): { success: true; data: T } | { success: false } }, value: unknown): T {
@@ -94,14 +94,17 @@ export async function saveMcpInstallation(raw: unknown) {
   if (company && company !== input.orgId) throw new AuthError("FORBIDDEN");
   const server = await prisma.mcpServer.findUnique({
     where: { id: input.serverId },
-    select: { id: true, template: true, internal: true, kind: true },
+    select: { id: true, template: true, internal: true, kind: true, authType: true, authHeader: true },
   });
   if (!server) throw new Error("NOT_FOUND");
   if (!server.template || server.kind === "media") throw new Error("VALIDATION");
-  if (input.authType === "query" && server.kind !== "hosted") throw new Error("VALIDATION");
   if (input.baseUrl) {
     const verdict = checkServerUrl(input.baseUrl, server.internal);
     if (!verdict.ok) throw new Error(verdict.code);
+  }
+  const authHeader = authUsesName(input.authType) ? input.authHeader : "";
+  if (!authNameValid(input.authType, authHeader || installedAuthName(input.authType, "", server))) {
+    throw new Error("VALIDATION");
   }
   const previous = await prisma.mcpInstallation.findUnique({
     where: { serverId_orgId: { serverId: input.serverId, orgId: input.orgId } },
@@ -119,14 +122,14 @@ export async function saveMcpInstallation(raw: unknown) {
       enabled: input.enabled,
       baseUrl: input.baseUrl,
       authType: input.authType,
-      authHeader: authUsesName(input.authType) ? input.authHeader : "",
+      authHeader,
       authSecret,
     },
     update: {
       enabled: input.enabled,
       baseUrl: input.baseUrl,
       authType: input.authType,
-      authHeader: authUsesName(input.authType) ? input.authHeader : "",
+      authHeader,
       authSecret,
     },
   });

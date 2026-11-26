@@ -74,6 +74,7 @@ export function serializeModelAlias(group: ModelGroupView) {
     variants: group.variants,
     extra_names: group.extraNames,
     merge_system_messages: group.mergeSystemMessages,
+    session_affinity: group.sessionAffinity,
     strategy: group.strategy,
     billing_mode: group.billingMode,
     price_input_per_1k: group.priceInput,
@@ -219,6 +220,8 @@ export function serializeBudget(kind: BudgetKind, holder: { id: string; alias: s
     spend: budget.spend,
     max_budget: budget.maxBudget,
     budget_duration: orNull(budget.budgetDuration),
+    budget_mode: budget.budgetMode,
+    overrun_percent: budget.overrunPct,
     resets_at: budget.resetsAt,
     temporary_amount: budget.boost,
     temporary_budgets: budget.boosts.map((boost) => ({

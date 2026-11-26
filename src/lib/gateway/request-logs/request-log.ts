@@ -3,6 +3,7 @@ import prisma from "@/lib/db/prisma";
 import { asRecord } from "@/lib/gateway/core";
 import { connectionFailureReason } from "@/lib/gateway/errors";
 import { logPayload } from "@/lib/gateway/request-logs/log-content";
+import { servedAffinity } from "@/lib/gateway/routing/deployment-affinity";
 import { defaultEntityIds, redactJSON, redactPii } from "@/lib/gateway/safety/pii";
 import { piiRestoreSummary, vaultOf } from "@/lib/gateway/safety/pii-vault";
 import { requestEnterprise, resolvePii } from "@/lib/settings/enterprise";
@@ -12,6 +13,9 @@ import { notifyLive } from "@/lib/updates/live-topics";
 import { labelRecord, storedLabel } from "@/lib/usage/labels";
 import type { Prisma } from "@/generated/prisma/client";
 import { contentSizeBytes } from "./content-size";
+import { storeAttachments } from "./attachment-store";
+import { extractAttachments } from "./log-attachments";
+import { announceRequestLog, finishRequest } from "./request-activity";
 import type { Principal } from "@/types/gateway";
 import type { Enterprise } from "@/types/settings";
 import type { ContentSkip, RequestLogEntry } from "@/types/logs";
@@ -44,6 +48,16 @@ function errorText(error: unknown): string {
   return (cause ? `${text}: ${cause}` : text).slice(0, ERROR_LIMIT);
 }
 
+async function captureAttachments(captured: ReturnType<typeof extractAttachments> | null) {
+  if (!captured?.files.length) return null;
+  try {
+    return { ...captured, storedBytes: await storeAttachments(captured.files) };
+  } catch (err) {
+    logger.warn("logs.attachment_store_failed", errorFields(err));
+    return null;
+  }
+}
+
 export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
   const [enterprise, pii] = await Promise.all([requestEnterprise(entry.principal), resolvePii(entry.principal)]);
   const trace = entry.principal.trace;
@@ -66,7 +80,13 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
     if (sessionId) sessionId = redactPii(sessionId, entities);
   }
   const skip = await contentSkip(entry.principal, enterprise);
-  const stored = skip ? null : { request: logPayload(request), response: logPayload(response) };
+  const captured = await captureAttachments(
+    skip || enterprise.log_attachments === false ? null : extractAttachments(request, response),
+  );
+  const stored = skip
+    ? null
+    : { request: logPayload(captured?.request ?? request), response: logPayload(captured?.response ?? response) };
+  const attachments = captured?.files ?? [];
   const content =
     stored && (stored.request || stored.response)
       ? {
@@ -74,11 +94,15 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
             ...(stored.request ? { request: stored.request.value as Prisma.InputJsonValue } : {}),
             ...(stored.response ? { response: stored.response.value as Prisma.InputJsonValue } : {}),
             truncated: Boolean(stored.request?.truncated || stored.response?.truncated),
-            sizeBytes: contentSizeBytes(stored.request?.value, stored.response?.value),
+            sizeBytes: contentSizeBytes(stored.request?.value, stored.response?.value) + (captured?.storedBytes ?? 0),
+            ...(attachments.length
+              ? { attachments: { create: attachments.map((file) => ({ attachmentId: file.id })) } }
+              : {}),
           },
         }
       : undefined;
   const streamFlag = asRecord(request)?.stream;
+  const affinity = servedAffinity(entry.deployment);
   const dims = {
     keyId: entry.principal.key?.token_id ?? "",
     userId: entry.principal.userId,
@@ -94,6 +118,8 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
     provider: entry.deployment?.kind ?? "",
     upstreamModel: entry.deployment?.model ?? "",
     providerId: entry.deployment?.provider_id ?? "",
+    affinity: affinity?.outcome ?? "",
+    affinityKey: affinity?.key ?? "",
     stream: entry.stream ?? (streamFlag === true || streamFlag === "true"),
     tag,
     labels: (entry.labels ?? []).map(storedLabel),
@@ -114,10 +140,16 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
     guardOutput: [...(trace?.guardOutput ?? [])],
     contentSkip: skip,
   };
-  const log = await prisma.requestLog.create({
-    data: { ...dims, ...meta, cost: entry.cost, ...(piiRestore ? { piiRestore } : {}), ...(content ? { contents: content } : {}) },
-  });
+  const log = await prisma.requestLog
+    .create({
+      data: { ...dims, ...meta, cost: entry.cost, ...(piiRestore ? { piiRestore } : {}), ...(content ? { contents: content } : {}) },
+    })
+    .catch((err: unknown) => {
+      finishRequest(trace);
+      throw err;
+    });
   notifyLive("requests");
+  announceRequestLog({ orgId: dims.orgId, userId: dims.userId, keyId: dims.keyId, sessionId }, trace);
 
   try {
     if (!enterprise.log_archive) return;
@@ -137,6 +169,8 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
       provider: meta.provider,
       upstream_model: meta.upstreamModel,
       provider_id: meta.providerId,
+      affinity: meta.affinity,
+      affinity_key: meta.affinityKey,
       stream: meta.stream,
       status: meta.status,
       outcome: meta.outcome,

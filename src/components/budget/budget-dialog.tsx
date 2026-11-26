@@ -19,10 +19,11 @@ import { useFormatter, useTranslations } from "next-intl";
 import { useClock } from "@/lib/hooks/use-clock";
 import { formats } from "@/i18n/formats";
 import { isActionFail } from "@/lib/http/action-result";
-import { budgetPeriod, capConflict, meterColor } from "@/lib/utils/budget";
+import { budgetPeriod, capConflict, MAX_OVERRUN_PCT, meterColor, overrunPercent } from "@/lib/utils/budget";
 import type { ActionFail } from "@/types/actions";
 import type {
   BudgetInput,
+  BudgetMode,
   BudgetResult,
   BudgetTarget,
   BudgetView,
@@ -30,8 +31,11 @@ import type {
 } from "@/types/structure";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import FormDialog from "@/components/console/form-dialog";
+import ChoiceCards from "@/components/console/choice-cards";
 
 const PRESETS = [10, 50, 100, 500, 1000];
+const MODES: readonly BudgetMode[] = ["soft", "hard"];
+const DEFAULT_OVERRUN_PCT = 10;
 
 const PERIODS = [
   { id: "none", value: "", label: "none" },
@@ -64,6 +68,9 @@ export default function BudgetDialog({
   const [limited, setLimited] = useState(current > 0);
   const [amount, setAmount] = useState(current > 0 ? current : 100);
   const [period, setPeriod] = useState(savedPeriod);
+  const [mode, setMode] = useState<BudgetMode>(budget?.budgetMode ?? "soft");
+  const [overrunCapped, setOverrunCapped] = useState(budget?.overrunPct != null);
+  const [overrun, setOverrun] = useState(budget?.overrunPct ?? DEFAULT_OVERRUN_PCT);
   const [pending, start] = useTransition();
   const periodLabel = useId();
   const valid = Number.isFinite(amount) && amount > 0;
@@ -73,6 +80,8 @@ export default function BudgetDialog({
   const ratio = cap > 0 ? Math.min(1, spend / cap) : 0;
   const custom = PERIODS.some((item) => item.value === period) ? null : period;
   const resetsAt = budget?.resetsAt && period === savedPeriod ? new Date(budget.resetsAt) : null;
+  const overrunValid = overrunPercent(overrun) != null;
+  const overrunPct = mode === "soft" && overrunCapped ? overrun : null;
 
   function save(close: () => void) {
     if (!target) return;
@@ -82,6 +91,8 @@ export default function BudgetDialog({
         id: target.id,
         maxBudget: cap,
         budgetDuration: period,
+        budgetMode: mode,
+        overrunPct,
       });
       if (isActionFail(result)) {
         showError(result.error);
@@ -100,7 +111,9 @@ export default function BudgetDialog({
       description={t("kindHint", { kind: target?.kind ?? "org" })}
       submitLabel={t("saveBudget")}
       pending={pending}
-      isSubmitDisabled={!target || Boolean(conflict) || (limited && !valid)}
+      isSubmitDisabled={
+        !target || Boolean(conflict) || (limited && !valid) || (limited && overrunPct !== null && !overrunValid)
+      }
       onSubmit={save}
     >
       <Card variant="secondary">
@@ -190,6 +203,51 @@ export default function BudgetDialog({
               </Button>
             ))}
           </div>
+          <ChoiceCards
+            label={t("mode")}
+            value={mode}
+            columns={2}
+            isDisabled={pending}
+            onChange={setMode}
+            options={MODES.map((id) => ({ id, label: t("modes", { mode: id }), hint: t("modeHints", { mode: id }) }))}
+          />
+          {mode === "soft" ? (
+            <div className="space-y-3">
+              <Switch isSelected={overrunCapped} onChange={setOverrunCapped} isDisabled={pending}>
+                <Switch.Content>
+                  <Switch.Control>
+                    <Switch.Thumb />
+                  </Switch.Control>
+                  <Label>{t("capOverrun")}</Label>
+                </Switch.Content>
+                <Description>{t("capOverrunHint")}</Description>
+              </Switch>
+              {overrunCapped ? (
+                <NumberField
+                  fullWidth
+                  value={overrun}
+                  onChange={setOverrun}
+                  minValue={1}
+                  maxValue={MAX_OVERRUN_PCT}
+                  formatOptions={formats.number.percentPoints}
+                  isInvalid={!overrunValid}
+                  isDisabled={pending}
+                >
+                  <Label>{t("overrun")}</Label>
+                  <NumberField.Group>
+                    <NumberField.DecrementButton />
+                    <NumberField.Input />
+                    <NumberField.IncrementButton />
+                  </NumberField.Group>
+                  {overrunValid ? (
+                    <Description>{t("overrunHint", { ceiling: cap * (1 + overrun / 100) })}</Description>
+                  ) : (
+                    <FieldError>{t("overrunInvalid", { max: MAX_OVERRUN_PCT })}</FieldError>
+                  )}
+                </NumberField>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
 

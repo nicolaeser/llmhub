@@ -1,5 +1,156 @@
 {
   "intro": "Every tool needs the same three things: the hub address, an API key, and a model name. Pick your tool and follow the steps. The values are already filled in.",
+  "mode": {
+    "label": "What do you want to connect?",
+    "option": "{mode, select, mcp {MCP tools} other {Models}}",
+    "hint": "{mode, select, mcp {Give your tools the hub's MCP servers through one address.} other {Use the hub's models in your tools: address, key, and model name.}}"
+  },
+  "mcp": {
+    "intro": "The hub bundles every MCP server your key may use behind one MCP address. Your tool signs in with your hub API key, the hub runs each tool call with that key's access, and the servers' own credentials never leave the hub.",
+    "auto": {
+      "title": "Already using the hub for models?",
+      "body": "Then your tools already have these MCP tools: the hub adds them to every model request and runs them itself. Connect the MCP address for tools that use other models, or when you want the tool to call the MCP tools itself."
+    },
+    "pick": "Not listed? Choose Other tool. Every MCP client that can send a header works.",
+    "access": {
+      "url": "MCP address",
+      "urlHint": "Streamable HTTP for every MCP version. The key goes in the Authorization header.",
+      "tools": "{manage, select, yes {Which tools you get depends on the MCP servers allowed for your key. You manage them on the <mcp>MCP servers</mcp> page.} other {Which tools you get depends on the MCP servers allowed for your key. Your admin decides that.}}"
+    },
+    "result": {
+      "ok": "{count, plural, =0 {It reaches no MCP tools yet.} one {It reaches # MCP tool.} other {It reaches # MCP tools.}}",
+      "none": "{manage, select, yes {Allow an MCP server for this key on the <mcp>MCP servers</mcp> page.} other {Ask your admin to allow MCP servers for this key.}}",
+      "fail": "{code, select, invalid_api_key {This key is unknown. Copy the whole key, starting with sk-hub-, without spaces.} key_paused {This key is paused. Resume it under API keys.} ip_not_allowed {This key only works from certain IP addresses, and this browser is not one of them. Your tool may still work.} outside_access_window {This key only works at certain times. Check its access window under API keys.} endpoint_not_allowed {This key may not use MCP. Add MCP to its allowed endpoints under API keys.} budget_exceeded {This key's budget is used up.} rate_limit_exceeded {Too many requests right now. Try again in a moment.} network {The hub did not answer. Check your connection.} other {The check failed. Open the help below.}}"
+    },
+    "fields": "{field, select, url {MCP address} header {Header name} value {Header value} other {Address for older SSE clients}}",
+    "check": "Ask your tool for something one of the MCP tools does. The first time, the tool may ask you to allow the call.",
+    "help": "The most common problems and what to do.",
+    "topics": {
+      "endpoint": {
+        "title": "403 with endpoint_not_allowed: the key may not use MCP",
+        "body": "The key only allows certain endpoints. Open it under <keys>API keys</keys> and add MCP to its allowed endpoints, or leave the list empty."
+      },
+      "noTools": {
+        "title": "The tool connects but shows no tools",
+        "body": "{manage, select, yes {The hub only offers MCP servers that are allowed for your key, its project, department, or company. Check the access rules on the <mcp>MCP servers</mcp> page. Changes show up once the tool reloads its tool list.} other {The hub only offers MCP servers that are allowed for your key, its project, department, or company. Ask your admin to allow the servers you need. Changes show up once the tool reloads its tool list.}}"
+      },
+      "sse": {
+        "title": "The tool only offers SSE",
+        "body": "Older tools speak the HTTP+SSE transport from 2024. Choose Other tool above and use the address ending in /mcp/sse. The header stays the same."
+      },
+      "twice": {
+        "title": "Every tool shows up twice",
+        "body": "Your tool also uses the hub for models, and the hub adds the same tools to every model request. Have the tool send the header X-LLMHub-MCP: off with its model requests. The notes for Claude Code, Codex CLI, and OpenCode show where."
+      },
+      "network": {
+        "title": "Timeout or connection refused",
+        "body": "The tool cannot reach the hub. MCP tools connect from your computer, so the hub address must be reachable from there. localhost only works on the same computer."
+      }
+    },
+    "tools": {
+      "claudeCode": {
+        "name": "Claude Code",
+        "hint": "Anthropic's coding agent in the terminal",
+        "about": "Claude Code adds the hub as one MCP server for all your projects.",
+        "steps": {
+          "add": "Run this in a terminal. <code>--scope user</code> makes the tools available in every project.",
+          "verify": "Start <code>claude</code> and type <code>/mcp</code>. llmhub must show as connected, with its tools."
+        },
+        "notes": {
+          "twice": "Claude Code also uses the hub for models? Add <code>{setting}</code> to the <code>env</code> block in <code>~/.claude/settings.json</code>, so the tools are not offered twice.",
+          "remove": "To remove the server again, run <code>{command}</code>."
+        }
+      },
+      "codex": {
+        "name": "Codex CLI",
+        "hint": "OpenAI's coding agent in the terminal",
+        "about": "Codex reads the MCP address from its config file and the key from an environment variable.",
+        "steps": {
+          "config": "Open <code>~/.codex/config.toml</code> (on Windows <code>%USERPROFILE%\\.codex\\config.toml</code>). Create the file if it does not exist and add this at the end.",
+          "key": "Save your API key as the environment variable <code>LLMHUB_API_KEY</code>. The model setup uses the same variable:",
+          "verify": "Open a new terminal, start <code>codex</code>, and type <code>/mcp</code>. llmhub must show its tools."
+        },
+        "notes": {
+          "twice": "Codex also uses the hub for models? Add <code>{setting}</code> under <code>[model_providers.llmhub]</code>, so the tools are not offered twice."
+        }
+      },
+      "opencode": {
+        "name": "OpenCode",
+        "hint": "Open-source coding agent in the terminal",
+        "about": "OpenCode reads MCP servers from its config file.",
+        "steps": {
+          "config": "Open <code>~/.config/opencode/opencode.json</code>. Create the file if it does not exist and paste this. If it already has an <code>mcp</code> block, add only the <code>llmhub</code> entry.",
+          "verify": "Start <code>opencode</code>. The hub's tools are available right away."
+        },
+        "notes": {
+          "twice": "OpenCode also uses the hub for models? Add <code>{setting}</code> to the <code>options</code> of the <code>llmhub</code> provider, so the tools are not offered twice."
+        }
+      },
+      "cursor": {
+        "name": "Cursor",
+        "hint": "AI code editor",
+        "about": "Cursor reads MCP servers from mcp.json in your home folder.",
+        "steps": {
+          "config": "Open <code>~/.cursor/mcp.json</code> (on Windows <code>%USERPROFILE%\\.cursor\\mcp.json</code>). Create the file if it does not exist and paste this. If it already has an <code>mcpServers</code> block, add only the <code>llmhub</code> entry.",
+          "verify": "Open <b>Cursor Settings → Tools & MCP</b>. llmhub must show a green dot and its tools."
+        },
+        "notes": {
+          "project": "For one project only, put the same content in <code>.cursor/mcp.json</code> inside the project."
+        }
+      },
+      "vscode": {
+        "name": "VS Code",
+        "hint": "GitHub Copilot in agent mode",
+        "about": "VS Code reads MCP servers from your user configuration and offers them in Copilot's agent mode.",
+        "steps": {
+          "open": "Open the Command Palette (Ctrl+Shift+P, on macOS Cmd+Shift+P) and run <b>MCP: Open User Configuration</b>.",
+          "config": "Paste this. If the file already has a <code>servers</code> block, add only the <code>llmhub</code> entry.",
+          "verify": "Run <b>MCP: List Servers</b>. llmhub must show as running. In Copilot Chat, switch to Agent; the tools button lists the hub's tools."
+        },
+        "notes": {
+          "project": "For one project only, put the same content in <code>.vscode/mcp.json</code> inside the project. Do not commit the file with your key in it."
+        }
+      },
+      "claudeDesktop": {
+        "name": "Claude Desktop",
+        "hint": "Anthropic's app for chat, Cowork, and Code",
+        "about": "Claude Desktop reaches the hub through mcp-remote, a small bridge that sends your key along.",
+        "steps": {
+          "node": "Install Node.js from nodejs.org if it is not installed yet. Claude Desktop starts the bridge with <code>npx</code>.",
+          "open": "In Claude Desktop, open <b>Settings → Developer</b> and click <b>Edit Config</b>. This opens <code>claude_desktop_config.json</code>.",
+          "config": "Paste this. If the file already has an <code>mcpServers</code> block, add only the <code>llmhub</code> entry.",
+          "restart": "Quit Claude Desktop completely and start it again. <b>Settings → Developer</b> then shows llmhub as running."
+        },
+        "notes": {
+          "connectors": "Custom connectors under Settings → Connectors cannot send an API key, so Claude Desktop needs the bridge.",
+          "header": "The key sits in the env block because Windows breaks arguments that contain spaces. Keep <code>Authorization:</code> without a space after the colon."
+        }
+      },
+      "gemini": {
+        "name": "Gemini CLI",
+        "hint": "Google's coding agent in the terminal",
+        "about": "Gemini CLI reads MCP servers from its settings file.",
+        "steps": {
+          "config": "Open <code>~/.gemini/settings.json</code> (on Windows <code>%USERPROFILE%\\.gemini\\settings.json</code>). Create the file if it does not exist and paste this. If it already has an <code>mcpServers</code> block, add only the <code>llmhub</code> entry.",
+          "verify": "Start <code>gemini</code> and type <code>/mcp</code>. llmhub must show as ready, with its tools."
+        }
+      },
+      "other": {
+        "name": "Other tool",
+        "hint": "Any MCP client that can send a header",
+        "about": "Every MCP client needs the address and one header.",
+        "steps": {
+          "fields": "Enter these values in your tool. Choose Streamable HTTP (sometimes just HTTP) as the transport.",
+          "test": "Check from a terminal that your key reaches tools:",
+          "sse": "Your tool only offers SSE? Use this address instead. The header stays the same."
+        },
+        "notes": {
+          "versions": "The address speaks every MCP version from 2024-11-05 to 2026-07-28 and needs no session.",
+          "noHeader": "Tools that cannot send a header cannot use the hub's MCP address. The key never goes in the address."
+        }
+      }
+    }
+  },
   "local": {
     "title": "This address only works on this computer",
     "body": "You opened the hub at {host}. Other computers and cloud tools such as Cursor cannot reach it. Open the console at the hub's public address, and the steps below use that one."

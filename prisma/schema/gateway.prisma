@@ -9,6 +9,8 @@ model Organization {
   maxBudget       Decimal   @default(0) @db.Decimal(20, 10)
   spend           Decimal   @default(0) @db.Decimal(20, 10)
   budgetDuration  String    @default("")
+  budgetMode      String    @default("soft")
+  budgetOverrunPct Int?
   spendResetAt    DateTime?
   labelKeys       String[]  @default([])
   paused          Boolean   @default(false)
@@ -45,6 +47,8 @@ model Team {
   maxBudget      Decimal       @default(0) @db.Decimal(20, 10)
   spend          Decimal       @default(0) @db.Decimal(20, 10)
   budgetDuration String        @default("")
+  budgetMode     String        @default("soft")
+  budgetOverrunPct Int?
   rpmLimit       Int           @default(0)
   tpmLimit       Int           @default(0)
   spendResetAt   DateTime?
@@ -98,6 +102,8 @@ model Project {
   maxBudget       Decimal       @default(0) @db.Decimal(20, 10)
   spend           Decimal       @default(0) @db.Decimal(20, 10)
   budgetDuration  String        @default("")
+  budgetMode      String        @default("soft")
+  budgetOverrunPct Int?
   spendResetAt    DateTime?
   paused          Boolean       @default(false)
   pausedUntil     DateTime?
@@ -130,6 +136,8 @@ model Member {
   maxBudget      Decimal      @default(0) @db.Decimal(20, 10)
   spend          Decimal      @default(0) @db.Decimal(20, 10)
   budgetDuration String       @default("")
+  budgetMode     String       @default("soft")
+  budgetOverrunPct Int?
   spendResetAt   DateTime?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -166,6 +174,8 @@ model VirtualKey {
   tpmLimit         Int           @default(0)
   maxRequestCost   Decimal       @default(0) @db.Decimal(20, 10)
   budgetDuration   String        @default("")
+  budgetMode       String        @default("soft")
+  budgetOverrunPct Int?
   expiresAt        DateTime?
   allowedIps       Json          @default("[]")
   allowedEndpoints Json          @default("[]")
@@ -426,6 +436,7 @@ model ModelGroup {
   variants       String[] @default([])
   extraNames     String[] @default([])
   mergeSystemMessages Boolean @default(false)
+  sessionAffinity     Boolean @default(false)
 
   deployments  Deployment[]
   priceWindows ModelPriceWindow[]
@@ -600,6 +611,8 @@ model RequestLog {
   labels           String[]           @default([])
   sessionId        String             @default("")
   agent            String             @default("")
+  affinity         String             @default("")
+  affinityKey      String             @default("")
   providerId       String             @default("")
   status           Int                @default(0)
   latencyMs        Int                @default(0)
@@ -642,9 +655,35 @@ model RequestLogContent {
   createdAt DateTime   @default(now())
   sizeBytes Int?
 
+  attachments RequestLogAttachment[]
+
   @@id([logId, createdAt])
   @@index([createdAt])
   @@index([sizeBytes])
+}
+
+model LogAttachment {
+  id          String   @id
+  contentType String
+  bytes       Int
+  payload     Bytes?
+  storageKey  String   @default("")
+  usedAt      DateTime @default(now())
+
+  refs RequestLogAttachment[]
+
+  @@index([usedAt])
+}
+
+model RequestLogAttachment {
+  logId            String
+  contentCreatedAt DateTime
+  attachmentId     String
+  content          RequestLogContent @relation(fields: [logId, contentCreatedAt], references: [logId, createdAt], onDelete: Cascade)
+  attachment       LogAttachment     @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+
+  @@id([logId, contentCreatedAt, attachmentId])
+  @@index([attachmentId])
 }
 
 model StoredObject {
@@ -751,6 +790,20 @@ model TempBudget {
   until      DateTime
 
   @@index([entityType, entityId])
+}
+
+model BudgetHold {
+  id         String   @id @default(cuid())
+  holdId     String
+  entityType String
+  entityId   String
+  amount     Decimal  @db.Decimal(20, 10)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId, expiresAt])
+  @@index([holdId])
+  @@index([expiresAt])
 }
 
 model GatewayAuditLog {

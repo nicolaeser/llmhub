@@ -384,6 +384,21 @@ async function readLimited(response: Response, limit: number): Promise<string> {
   return text.length > 16_000 ? `${text.slice(0, 16_000)}\n[truncated]` : text;
 }
 
+const MIN_REDACTED_LENGTH = 6;
+
+function secretsOf(auth: McpHostedAuth): string[] {
+  const values = [
+    ...Object.values(auth.query),
+    ...Object.values(auth.headers).flatMap((value) => [value, value.slice(value.indexOf(" ") + 1)]),
+  ];
+  const variants = values.flatMap((value) => [value, encodeURIComponent(value), new URLSearchParams({ v: value }).toString().slice(2)]);
+  return [...new Set(variants)].filter((value) => value.length >= MIN_REDACTED_LENGTH).sort((a, b) => b.length - a.length);
+}
+
+export function withoutSecrets(text: string, auth: McpHostedAuth): string {
+  return secretsOf(auth).reduce((out, secret) => out.split(secret).join("[redacted]"), text);
+}
+
 export async function callHosted(
   baseUrl: string,
   internal: boolean,
@@ -415,7 +430,7 @@ export async function callHosted(
     });
     const length = Number(response.headers.get("content-length") ?? 0);
     if (Number.isFinite(length) && length > MAX_RESPONSE_BYTES) return { text: "The API response was too large.", isError: true };
-    const text = await readLimited(response, MAX_RESPONSE_BYTES);
+    const text = withoutSecrets(await readLimited(response, MAX_RESPONSE_BYTES), auth);
     if (!response.ok) return { text: text ? `HTTP ${response.status}: ${text}` : `HTTP ${response.status}`, isError: true };
     return { text: text || "The tool returned no content.", isError: false };
   } catch (err) {

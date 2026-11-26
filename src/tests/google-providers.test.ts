@@ -690,6 +690,81 @@ test("gemini-embedding sends one text per request and other Vertex embedding mod
   );
 });
 
+test("gemini-embedding-2 on Vertex goes to :embedContent one text at a time and only in global, us, or eu", async () => {
+  const { joinPath, proxyJson } = await import("@/lib/gateway/dispatch/upstream");
+  const globalBase = "https://aiplatform.googleapis.com/v1/projects/hub-test-project/locations/global";
+  const euBase = "https://aiplatform.eu.rep.googleapis.com/v1/projects/hub-test-project/locations/eu";
+  assert.equal(
+    joinPath(deployment("vertex", "gemini-embedding-2", globalBase), "/embeddings"),
+    `${globalBase}/publishers/google/models/gemini-embedding-2:embedContent`,
+  );
+  assert.equal(
+    joinPath(deployment("vertex", "gemini-embedding-2-preview", euBase), "/embeddings"),
+    `${euBase}/publishers/google/models/gemini-embedding-2-preview:embedContent`,
+  );
+  assert.throws(
+    () => joinPath(deployment("vertex", "gemini-embedding-2", SA_BASE), "/embeddings"),
+    (err: unknown) => err instanceof GateError && err.status === 400 && /global, us, or eu/.test(err.message),
+  );
+
+  let step = 0;
+  respondWith(() => {
+    step += 1;
+    return Response.json({ embedding: { values: [step / 4] }, usageMetadata: { promptTokenCount: step + 1 }, truncated: false });
+  });
+  const split = await proxyJson({
+    dep: deployment("vertex", "gemini-embedding-2", EXPRESS_BASE),
+    auth: { key: "AIzaExpress", headers: {}, keyHeader: "x-goog-api-key" },
+    path: "/embeddings",
+    body: { model: "alias", input: ["one", "two"], dimensions: 768, task_type: "RETRIEVAL_DOCUMENT", title: "Notes" },
+  });
+  assert.deepEqual(
+    calls.map((call) => call.url),
+    [
+      `${EXPRESS_BASE}/publishers/google/models/gemini-embedding-2:embedContent`,
+      `${EXPRESS_BASE}/publishers/google/models/gemini-embedding-2:embedContent`,
+    ],
+  );
+  assert.deepEqual(JSON.parse(String(calls[0]!.init?.body)), {
+    content: { parts: [{ text: "one" }] },
+    embedContentConfig: { taskType: "RETRIEVAL_DOCUMENT", title: "Notes", outputDimensionality: 768 },
+  });
+  assert.deepEqual(JSON.parse(String(calls[1]!.init?.body)).content, { parts: [{ text: "two" }] });
+  assert.deepEqual(split.json, {
+    object: "list",
+    data: [
+      { object: "embedding", index: 0, embedding: [0.25] },
+      { object: "embedding", index: 1, embedding: [0.5] },
+    ],
+    model: "gemini-embedding-2",
+    usage: { prompt_tokens: 5, total_tokens: 5 },
+  });
+
+  calls.length = 0;
+  respondWith(() => Response.json({ embedding: { values: [0.75] } }));
+  const single = await proxyJson({
+    dep: deployment("vertex", "gemini-embedding-2", globalBase),
+    auth: { key: "ya29.token", headers: {} },
+    path: "/embeddings",
+    body: { model: "alias", input: "solo" },
+  });
+  assert.equal(calls.length, 1);
+  assert.deepEqual(JSON.parse(String(calls[0]!.init?.body)), { content: { parts: [{ text: "solo" }] } });
+  assert.deepEqual((single.json as JsonMap).data, [{ object: "embedding", index: 0, embedding: [0.75] }]);
+  assert.deepEqual((single.json as JsonMap).usage, { prompt_tokens: 0, total_tokens: 0 });
+
+  respondWith(() => Response.json({ usageMetadata: { promptTokenCount: 1 } }));
+  await assert.rejects(
+    proxyJson({
+      dep: deployment("vertex", "gemini-embedding-2", globalBase),
+      auth: { key: "ya29.token", headers: {} },
+      path: "/embeddings",
+      body: { model: "alias", input: "solo" },
+    }),
+    (err: unknown) => err instanceof GateError && err.code === "upstream_error",
+  );
+});
+
 test("Vertex embedding calls fan out for gemini-embedding and stay one batch for text embedding models", async () => {
   const { proxyJson } = await import("@/lib/gateway/dispatch/upstream");
   const auth = { key: "ya29.token", headers: {} };
@@ -1161,18 +1236,90 @@ test("Vertex discovery lists Gemini, embedding, Imagen, and versioned Claude mod
 
 test("express mode keeps listed embedding models and skips Imagen", async () => {
   const { fetchVertexModels } = await import("@/lib/gateway/upstreams/google-models");
-  respondWith(() =>
-    Response.json({
-      publisherModels: [
-        { name: "publishers/google/models/gemini-2.5-flash" },
-        { name: "publishers/google/models/gemini-embedding-001" },
-        { name: "publishers/google/models/imagen-4.0-generate-001" },
-      ],
-    }),
+  respondWith((url) =>
+    url.endsWith(":predict") || url.endsWith(":embedContent")
+      ? Response.json({ error: { code: 404, status: "NOT_FOUND" } }, { status: 404 })
+      : Response.json({
+          publisherModels: [
+            { name: "publishers/google/models/gemini-2.5-flash" },
+            { name: "publishers/google/models/gemini-embedding-001" },
+            { name: "publishers/google/models/imagen-4.0-generate-001" },
+          ],
+        }),
   );
   const models = await fetchVertexModels(EXPRESS_BASE, { key: "AIzaExpress", headers: {}, keyHeader: "x-goog-api-key" });
   assert.deepEqual(models.map((model) => model.id), ["gemini-2.5-flash", "gemini-embedding-001"]);
   assert.equal(calls.some((call) => call.url.endsWith(":countTokens")), false);
+  assert.deepEqual(
+    calls.filter((call) => call.init?.method === "POST").map((call) => call.url).sort(),
+    [
+      `${EXPRESS_BASE}/publishers/google/models/gemini-embedding-2:embedContent`,
+      `${EXPRESS_BASE}/publishers/google/models/text-embedding-005:predict`,
+      `${EXPRESS_BASE}/publishers/google/models/text-multilingual-embedding-002:predict`,
+    ],
+  );
+});
+
+test("Vertex discovery probes only the embedding models the list leaves out and keeps them when they answer", async () => {
+  const { fetchVertexModels, VERTEX_EXPRESS_MODELS } = await import("@/lib/gateway/upstreams/google-models");
+  const expressAuth = { key: "AIzaExpress", headers: {}, keyHeader: "x-goog-api-key" };
+  respondWith((url) => {
+    if (url.endsWith(":countTokens")) return Response.json({ totalTokens: 1 });
+    if (url.endsWith("/gemini-embedding-001:predict")) {
+      return Response.json({ predictions: [{ embeddings: { values: [0.1], statistics: { token_count: 1 } } }] });
+    }
+    if (url.endsWith("/gemini-embedding-2:embedContent")) return Response.json({ embedding: { values: [0.1] } });
+    if (url.endsWith("/text-embedding-005:predict")) return Response.json({ error: { code: 429 } }, { status: 429 });
+    return Response.json({ error: { code: 403 } }, { status: 403 });
+  });
+  const express = await fetchVertexModels(EXPRESS_BASE, expressAuth);
+  assert.deepEqual(
+    express.map((model) => [model.id, model.contextLength]).slice(VERTEX_EXPRESS_MODELS.length),
+    [
+      ["gemini-embedding-001", 2048],
+      ["gemini-embedding-2", 8192],
+    ],
+  );
+  const predict = calls.find((call) => call.url.endsWith("/gemini-embedding-001:predict"))!;
+  assert.equal(predict.init?.method, "POST");
+  assert.equal((predict.init?.headers as Record<string, string>)["x-goog-api-key"], "AIzaExpress");
+  assert.deepEqual(JSON.parse(String(predict.init?.body)), { instances: [{ content: "ping" }] });
+  const embedContent = calls.find((call) => call.url.endsWith("/gemini-embedding-2:embedContent"))!;
+  assert.deepEqual(JSON.parse(String(embedContent.init?.body)), { content: { parts: [{ text: "ping" }] } });
+
+  const again = await fetchVertexModels(EXPRESS_BASE, expressAuth, new Set(["text-embedding-005"]));
+  assert.ok(again.some((model) => model.id === "text-embedding-005"));
+
+  calls = [];
+  respondWith((url) => {
+    if (url.endsWith(":predict")) return Promise.reject(new TypeError("fetch failed"));
+    if (url.includes("/publishers/anthropic/")) return Response.json({ publisherModels: [] });
+    return Response.json({ publisherModels: [{ name: "publishers/google/models/gemini-2.5-pro" }] });
+  });
+  const project = await fetchVertexModels(SA_BASE, { key: "ya29.token", headers: {} }, new Set(["text-embedding-005", "gemini-2.5-pro"]));
+  assert.deepEqual(project.map((model) => model.id), ["gemini-2.5-pro", "text-embedding-005"]);
+  assert.deepEqual(
+    calls.filter((call) => call.url.includes(":predict") || call.url.includes(":embedContent")).map((call) => call.url),
+    ["gemini-embedding-001", "text-embedding-005", "text-multilingual-embedding-002"].map(
+      (id) => `${SA_BASE}/publishers/google/models/${id}:predict`,
+    ),
+  );
+});
+
+test("Vertex discovery sends no probe when the publisher list already names every embedding model", async () => {
+  const { fetchVertexModels, VERTEX_EMBEDDING_MODELS } = await import("@/lib/gateway/upstreams/google-models");
+  respondWith((url) =>
+    url.includes("/publishers/anthropic/")
+      ? Response.json({ publisherModels: [] })
+      : Response.json({
+          publisherModels: VERTEX_EMBEDDING_MODELS.map((model) => ({ name: `publishers/google/models/${model.id}` })),
+        }),
+  );
+  const globalBase = "https://aiplatform.googleapis.com/v1/projects/hub-test-project/locations/global";
+  const models = await fetchVertexModels(globalBase, { key: "ya29.token", headers: {} });
+  assert.deepEqual(models.map((model) => model.id).sort(), VERTEX_EMBEDDING_MODELS.map((model) => model.id).sort());
+  assert.equal(calls.length, 2);
+  assert.equal(calls.some((call) => call.init?.method === "POST"), false);
 });
 
 test("express mode falls back to the known Gemini models after a key check", async () => {
@@ -1192,6 +1339,8 @@ test("express mode falls back to the known Gemini models after a key check", asy
 test("the catalog files Google models under their vendors and folds Vertex Claude versions", () => {
   assert.equal(vendorOf("gemini", "gemini-2.5-pro"), "google");
   assert.equal(vendorOf("vertex", "gemini-2.5-pro"), "google");
+  assert.equal(vendorOf("vertex", "text-embedding-005"), "google");
+  assert.equal(vendorOf("vertex", "text-multilingual-embedding-002"), "google");
   assert.equal(vendorOf("vertex", "claude-sonnet-4-5@20250929"), "anthropic");
   assert.equal(vendorOf("vertex", "meta/llama-4-maverick-17b-128e-instruct-maas"), "meta");
   assert.equal(trustedKind("gemini"), true);

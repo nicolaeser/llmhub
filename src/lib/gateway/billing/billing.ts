@@ -11,15 +11,24 @@ import { writeRequestLog } from "@/lib/gateway/request-logs/request-log";
 import { requestLabels } from "@/lib/gateway/billing/label-keys";
 import { CLIENT_CLOSED_STATUS, GateError } from "@/lib/gateway/errors";
 import { applyMarkup, markupRuleOf, pickMarkup, scaleByMarkup } from "@/lib/gateway/billing/markup-policy";
-import { tighterCap } from "@/lib/gateway/billing/cost-cap";
-import { tokenCount } from "@/lib/gateway/billing/tokens";
+import { releaseHolds, settleHolds } from "@/lib/gateway/billing/budget-hold";
+import { budgetCeiling, budgetMode, tighterCap } from "@/lib/utils/budget";
+import { embeddingInputTokens, tokenCount } from "@/lib/gateway/billing/tokens";
 import { markUsed } from "@/lib/gateway/billing/last-used";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { notifyLive } from "@/lib/updates/live-topics";
 import type { Prisma } from "@/generated/prisma/client";
 import type { Principal } from "@/types/gateway";
-import type { SpendHolder, BillingContext, BillingGroup, CostCap, TokenUsage } from "@/types/billing";
+import type {
+  SpendHolder,
+  BillingContext,
+  BillingGroup,
+  BudgetCeiling,
+  BudgetLimits,
+  CostCap,
+  TokenUsage,
+} from "@/types/billing";
 import type { Deployment } from "@/types/routing";
 import type { BudgetKind } from "@/types/structure";
 import type { MarkupTarget } from "@/types/pricing";
@@ -50,6 +59,8 @@ const HOLDER_SELECT = {
   spend: true,
   maxBudget: true,
   budgetDuration: true,
+  budgetMode: true,
+  budgetOverrunPct: true,
   spendResetAt: true,
   createdAt: true,
 } as const;
@@ -130,7 +141,7 @@ export function budgetChain(principal: Principal): { kind: BudgetKind; id: strin
   return chain.filter((link) => link.id);
 }
 
-export async function assertBudget(principal: Principal): Promise<CostCap | null> {
+export async function assertBudget(principal: Principal): Promise<BudgetLimits> {
   const now = new Date();
   const chain = budgetChain(principal);
   const rows = await Promise.all(chain.map((link) => loadHolder(link.kind, link.id)));
@@ -140,6 +151,7 @@ export async function assertBudget(principal: Principal): Promise<CostCap | null
   });
   const boosts = await activeBoosts(capped, now);
   let tightest: CostCap | null = null;
+  const ceilings: BudgetCeiling[] = [];
   for (const [index, link] of chain.entries()) {
     const row = rows[index];
     if (!row) continue;
@@ -150,9 +162,11 @@ export async function assertBudget(principal: Principal): Promise<CostCap | null
     if (capExceeded(spend, maxBudget, extra)) {
       throw new GateError(429, "budget_exceeded", `${link.kind} budget exceeded`);
     }
-    tightest = tighterCap(tightest, { limit: maxBudget + extra - spend, budget: link.kind });
+    const ceiling = budgetCeiling(maxBudget + extra, budgetMode(row.budgetMode), row.budgetOverrunPct);
+    if (ceiling === null) tightest = tighterCap(tightest, { limit: maxBudget + extra - spend, budget: link.kind });
+    else ceilings.push({ kind: link.kind, id: row.id, limit: ceiling });
   }
-  return tightest;
+  return { cap: tightest, ceilings };
 }
 
 export async function assertRate(principal: Principal): Promise<void> {
@@ -307,6 +321,7 @@ export async function recordUsage(input: {
   const limited = input.status === 429 ? 1 : 0;
   const responseCache = responseCacheColumns(input.responseCache, cost);
   const labels = await labelsOrNone(input.principal, input.request ?? input.principal.trace?.request);
+  const holds = input.principal.trace?.holds ?? [];
   const meteringWrites = (): Prisma.PrismaPromise<unknown>[] => {
     const writes: Prisma.PrismaPromise<unknown>[] = [
       prisma.usageDaily.upsert({
@@ -409,9 +424,19 @@ export async function recordUsage(input: {
       if (orgId) writes.push(prisma.organization.updateMany({ where: { id: orgId }, data: increment }));
       if (projectId) writes.push(prisma.project.updateMany({ where: { id: projectId }, data: increment }));
     }
+    if (holds.length) writes.push(settleHolds(holds));
     return writes;
   };
-  await commitMetering(meteringWrites);
+  try {
+    await commitMetering(meteringWrites);
+  } catch (err) {
+    await releaseHolds(holds).catch((releaseErr) => logger.warn("billing.hold_release_failed", errorFields(releaseErr)));
+    throw err;
+  } finally {
+    if (holds.length && input.principal.trace) {
+      input.principal.trace.holds = (input.principal.trace.holds ?? []).filter((id) => !holds.includes(id));
+    }
+  }
   notifyLive("usage");
   const tokens = prompt + completion;
   const owner = ownerId(input.principal);
@@ -469,6 +494,14 @@ function label(value: unknown): string | undefined {
 function reportedCost(rec: Record<string, unknown>): number | undefined {
   if (typeof rec.cost !== "number" || !Number.isFinite(rec.cost) || rec.cost < 0) return undefined;
   return rec.cost + detail(rec, "cost_details", "upstream_inference_cost");
+}
+
+export function embeddingTokenUsage(json: unknown, input: unknown): Partial<TokenUsage> {
+  const rec = json && typeof json === "object" ? (json as Record<string, unknown>) : {};
+  const usage = usageFromUnknown(rec.usage, json);
+  if (usage.prompt_tokens) return usage;
+  const prompt = embeddingInputTokens(input);
+  return { ...usage, prompt_tokens: prompt, completion_tokens: 0, total_tokens: prompt };
 }
 
 export function usageFromUnknown(value: unknown, envelope?: unknown): Partial<TokenUsage> {

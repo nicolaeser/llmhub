@@ -89,6 +89,7 @@ export function concurrencyLimit(kind: string, configured: number | null | undef
 
 const LIMIT_KINDS = new Set(["codex", "claude", "grok_build", "antigravity", "kimi", "kimi_ai", "muse_code", "devin"]);
 const TRAFFIC_LIMIT_KINDS = new Set(["muse_code"]);
+const HEADER_LIMIT_KINDS = new Set(["claude", "codex"]);
 const KICKOFF_KINDS = new Set(["codex", "claude", "grok_build", "antigravity", "kimi", "kimi_ai"]);
 const KIMI_CODE_KINDS = new Set(["kimi", "kimi_ai"]);
 const KIMI_KINDS = new Set(["kimi", "kimi_ai", "moonshot", "moonshot_cn"]);
@@ -113,6 +114,10 @@ export function startsWindows(kind: string): kind is SignInKind {
 
 export function limitsFromTraffic(kind: string): boolean {
   return TRAFFIC_LIMIT_KINDS.has(kind);
+}
+
+export function limitsFromHeaders(kind: string): boolean {
+  return HEADER_LIMIT_KINDS.has(kind);
 }
 
 export function pollsLimits(kind: string): kind is SignInKind {

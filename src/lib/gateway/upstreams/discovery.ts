@@ -17,7 +17,9 @@ import { providerAuth } from "@/lib/gateway/upstreams/credentials";
 import { GateError } from "@/lib/gateway/errors";
 import { readJsonOr } from "@/lib/utils/json";
 import { discoveredOf, parsePricing, reportedContext } from "@/lib/gateway/upstreams/provider-prices";
+import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
+import { modelRole } from "@/lib/models/model-role";
 import { money } from "@/lib/utils/money";
 import type { Prisma } from "@/generated/prisma/client";
 import type {
@@ -30,6 +32,7 @@ import type {
 } from "@/types/providers";
 
 const ALERT_LIST_LIMIT = 10;
+const OPENROUTER_KINDS = new Set(["openrouter", "openrouter_eu"]);
 const PRICE_EPSILON = 1e-9;
 
 const UNCHANGED: DiscoveredDiff = { added: [], removed: [], repriced: [], changed: false };
@@ -44,6 +47,10 @@ function modelsUrl(kind: string, base: string): string {
   if (b.endsWith("/models")) return b;
   if (b.endsWith("/v1")) return `${b}/models`;
   return `${b}/v1/models`;
+}
+
+function embeddingModelsUrl(kind: string, base: string): string {
+  return `${modelsUrl(kind, base).replace(/\/models$/, "")}/embeddings/models`;
 }
 
 async function fetchAntigravityModels(auth: UpstreamAuth): Promise<DiscoveredModel[]> {
@@ -83,9 +90,24 @@ async function fetchConnectionModels(row: ProviderSyncRecord, auth: UpstreamAuth
   if (row.kind === "antigravity") return fetchAntigravityModels(auth);
   if (row.kind === "devin") return fetchDevinModels(auth);
   if (row.kind === "gemini") return fetchGeminiModels(providerBase(row), auth);
-  if (row.kind === "vertex") return fetchVertexModels(providerBase(row), auth);
+  if (row.kind === "vertex") {
+    return fetchVertexModels(providerBase(row), auth, new Set(discoveredOf(row.discovered).map((model) => model.id)));
+  }
   if (speaksMuse(row.kind)) return fetchMuseModels(row.kind, row.baseUrl, auth);
+  if (OPENROUTER_KINDS.has(row.kind)) return fetchOpenRouterModels(row, auth);
   return fetchProviderModels(row.kind, row.baseUrl, auth.key, auth.headers);
+}
+
+async function fetchOpenRouterModels(row: ProviderSyncRecord, auth: UpstreamAuth): Promise<DiscoveredModel[]> {
+  const listed = await fetchProviderModels(row.kind, row.baseUrl, auth.key, auth.headers);
+  const known = new Set(listed.map((model) => model.id));
+  const embeddings = await fetchProviderModels(row.kind, row.baseUrl, auth.key, auth.headers, "embeddings").catch(
+    (error: unknown) => {
+      logger.warn("provider.embedding_models_failed", { provider: row.id, kind: row.kind, ...errorFields(error) });
+      return discoveredOf(row.discovered).filter((model) => modelRole([model.id, model.name]) === "embedding");
+    },
+  );
+  return [...listed, ...embeddings.filter((model) => !known.has(model.id))];
 }
 
 export async function fetchProviderModels(
@@ -93,8 +115,9 @@ export async function fetchProviderModels(
   baseUrl: string,
   apiKey: string,
   authHeaders: Record<string, string> = {},
+  listing: "models" | "embeddings" = "models",
 ): Promise<DiscoveredModel[]> {
-  const url = modelsUrl(kind, baseUrl);
+  const url = listing === "embeddings" ? embeddingModelsUrl(kind, baseUrl) : modelsUrl(kind, baseUrl);
   const headers: Record<string, string> = { ...authHeaders, Accept: "application/json" };
   if (apiKey) {
     if (kind === "anthropic") {

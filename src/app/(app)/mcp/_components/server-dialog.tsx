@@ -21,7 +21,7 @@ import { useTranslations } from "next-intl";
 import StepDialog from "@/components/console/step-dialog";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
-import { authNameValid } from "@/schemas/mcp";
+import { authNameValid, urlToken } from "@/schemas/mcp";
 import type { McpAuthType, McpOAuthGrant, McpProbeResult, McpServerView, McpToolSpec } from "@/types/mcp";
 import { createMcpServerAction, probeMcpServerAction, updateMcpServerAction } from "../_action";
 import ServerAuthFields, { type ServerAuth } from "./server-auth-fields";
@@ -76,6 +76,13 @@ export default function ServerDialog({
   const headerValid = authNameValid(authType, authHeader);
   const clientValid = !oauth || oauthGrant !== "client_credentials" || oauthClientId.trim() !== "";
   const serverReady = name.trim() !== "" && url.trim() !== "";
+  const tokenInUrl = urlToken(url);
+
+  function moveToken() {
+    if (!tokenInUrl) return;
+    setUrl(tokenInUrl.url);
+    setAuth((current) => ({ ...current, authType: "query", authHeader: tokenInUrl.name, secret: tokenInUrl.value }));
+  }
   const authReady = headerValid && clientValid && !needsSecret;
   const signInPending = probe?.error === "MCP_AUTH_REQUIRED" && oauth && oauthGrant === "authorization_code";
   const pending = saving || testing;
@@ -152,6 +159,18 @@ export default function ServerDialog({
         <Input inputMode="url" placeholder={hosted ? "https://api.example.com" : "https://mcp.example.com/mcp"} />
         <Description>{hosted ? t("builder.baseHint") : t("form.urlHint")}</Description>
       </TextField>
+      {tokenInUrl ? (
+        <Alert status="warning">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>{t("form.urlTokenTitle", { name: tokenInUrl.name })}</Alert.Title>
+            <Alert.Description>{t("form.urlToken")}</Alert.Description>
+          </Alert.Content>
+          <Button size="sm" variant="secondary" isDisabled={pending} onPress={moveToken}>
+            {t("form.urlTokenMove")}
+          </Button>
+        </Alert>
+      ) : null}
       <TextField fullWidth value={description} onChange={setDescription} isDisabled={pending}>
         <Label>{t("form.descriptionField")}</Label>
         <Input />

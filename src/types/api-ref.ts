@@ -19,11 +19,17 @@ export type OpenApiMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export type OpenApiStyle = "openai" | "anthropic" | "dual" | "management";
 
+export type OpenApiHeader = {
+  name: string;
+  direction: "request" | "response";
+};
+
 export type OpenApiPath = {
   method: OpenApiMethod;
   path: string;
   summary: string;
   style: OpenApiStyle;
+  headers?: readonly OpenApiHeader[];
 };
 
 export type TryTarget =

@@ -1,6 +1,6 @@
 import "server-only";
 import { env } from "@/lib/env";
-import { GateError } from "@/lib/gateway/errors";
+import { clientClosedError, GateError } from "@/lib/gateway/errors";
 import {
   anthropicToChat,
   chatToAnthropic,
@@ -13,6 +13,8 @@ import { withSingleLeadingSystem } from "@/lib/gateway/protocols/leading-system"
 import { ANTHROPIC_VERSION_2023, ANTHROPIC_VERSION_HEADER, anthropicVersionOf } from "@/lib/gateway/protocols/anthropic-version";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
 import { accessOf } from "@/lib/gateway/routing/account-access";
+import { noteServed, runAffinity } from "@/lib/gateway/routing/deployment-affinity";
+import { SESSION_AFFINITY_HEADER } from "@/lib/gateway/routing/session-fingerprint";
 import { hiddenFrom, outsidePool, routable } from "@/lib/gateway/routing/route-pool";
 import { servesMessages, speaksAnthropic, speaksGoogle, speaksKimi, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
 import { entitlementRefusal, withClaudeBetas, withClaudeIdentity } from "@/lib/gateway/upstreams/claude";
@@ -39,7 +41,12 @@ import { DEVIN_CHAT_PATH, windowReset } from "@/lib/gateway/upstreams/devin-acco
 import { chatToDevin, devinCompletion, encodeDevinRequest } from "@/lib/gateway/upstreams/devin";
 import { kimiChatBody } from "@/lib/gateway/upstreams/kimi";
 import { promptCacheHeaders, withOpenRouterClaudeCache } from "@/lib/gateway/upstreams/prompt-cache";
-import { observeClaudeLimits, observeLimitWindows, recordStreamTraffic } from "@/lib/gateway/upstreams/limit-store";
+import {
+  observeClaudeLimits,
+  observeCodexLimits,
+  observeLimitWindows,
+  recordStreamTraffic,
+} from "@/lib/gateway/upstreams/limit-store";
 import { chatToMuse, museCompletion } from "@/lib/gateway/upstreams/muse";
 import { limitsSnapshot } from "@/lib/gateway/upstreams/subscription-limits";
 import { claudeRejectionReset } from "@/lib/gateway/upstreams/observed-limits";
@@ -61,7 +68,7 @@ import { parseJsonOrNull } from "@/lib/utils/json";
 import { costFilter, costRejected } from "@/lib/gateway/billing/cost-cap";
 import type { DevinResetLookup } from "@/types/devin";
 import type { JsonMap, Principal, ProxyFirstResult } from "@/types/gateway";
-import type { ResolvedDeployment, RoutePool, RouterWait } from "@/types/routing";
+import type { ResolvedDeployment, RoutePool, RouterWait, RunRouting } from "@/types/routing";
 import type { LimitWindow, UpstreamAuth } from "@/types/providers";
 
 const BEDROCK_MODEL = /(?:^|\.)anthropic\.claude-/i;
@@ -72,6 +79,7 @@ const UNFORWARDED_CLIENT_HEADERS = new Set([
   "connection",
   "authorization",
   ANTHROPIC_VERSION_HEADER,
+  SESSION_AFFINITY_HEADER,
 ]);
 
 function onBedrock(dep: ResolvedDeployment): boolean {
@@ -156,9 +164,11 @@ export function mergeUpstreamHeaders(
 }
 
 export function observeUpstreamLimits(dep: ResolvedDeployment, headers: Headers): void {
-  if (dep.provider) recordStreamTraffic(dep.provider.id);
-  if (dep.provider?.kind !== "claude") return;
-  void observeClaudeLimits(dep.provider.id, headers);
+  const provider = dep.provider;
+  if (!provider) return;
+  recordStreamTraffic(provider.id);
+  if (provider.kind === "claude") void observeClaudeLimits(provider.id, headers);
+  else if (provider.kind === "codex") void observeCodexLimits(provider.id, headers);
 }
 
 export function observeUpstreamStatus(dep: ResolvedDeployment, status: number): void {
@@ -170,7 +180,7 @@ export function upstreamModel(dep: ResolvedDeployment, body: JsonMap | null | un
 }
 
 export function wireBody(dep: ResolvedDeployment, auth: UpstreamAuth, path: string, payload: JsonMap): JsonMap {
-  if (speaksGoogle(dep.kind)) return googleWire(dep.kind, path, payload);
+  if (speaksGoogle(dep.kind)) return googleWire(dep.kind, path, payload, dep.model || asString(payload.model));
   return withProject(dep, auth, payload);
 }
 
@@ -254,6 +264,8 @@ export function xaiReasoningEffort(model: string, effort: unknown): string | und
   return effort;
 }
 
+const VIDEOS_PATH = /^\/(?:v1\/)?videos$/;
+
 export function prepareBody(
   dep: ResolvedDeployment,
   path: string,
@@ -296,7 +308,16 @@ export function prepareBody(
   if (speaksKimi(dep.kind) && nativeChatPath(path)) return kimiChatBody(payload, dep.kind);
   if (speaksGoogle(dep.kind)) return googlePayload(dep.kind, path, payload);
   if (dep.kind === "devin" && nativeChatPath(path)) return chatToDevin(payload, dep.facts);
+  if ((dep.kind === "openrouter" || dep.kind === "openrouter_eu") && VIDEOS_PATH.test(path)) return openRouterVideoBody(payload);
   return nativeChatPath(path) ? withOpenRouterClaudeCache(dep.kind, payload) : payload;
+}
+
+function openRouterVideoBody(payload: JsonMap): JsonMap {
+  const seconds = Number(payload.seconds);
+  if (payload.seconds === undefined || payload.duration !== undefined || !Number.isInteger(seconds) || seconds <= 0) return payload;
+  const body: JsonMap = { ...payload, duration: seconds };
+  delete body.seconds;
+  return body;
 }
 
 function decodeBody(
@@ -352,6 +373,18 @@ function decodeUpstream(dep: ResolvedDeployment, path: string, body: JsonMap | n
   return { ...parsed, json: decodeBody(dep, path, parsed.json, parsed.raw, model, asString(body?.encoding_format)) };
 }
 
+function upstreamSignal(timeoutMs: number | undefined, caller: AbortSignal | undefined): AbortSignal {
+  const timeout = AbortSignal.timeout(timeoutMs && timeoutMs > 0 ? timeoutMs : 120_000);
+  return caller ? AbortSignal.any([timeout, caller]) : timeout;
+}
+
+function callerAborted(signal: AbortSignal): GateError {
+  const reason: unknown = signal.reason;
+  return reason instanceof Error && reason.name === "TimeoutError"
+    ? new GateError(504, "upstream_timeout", "upstream request timed out", { requestScoped: true })
+    : clientClosedError();
+}
+
 export async function proxyJson(input: {
   dep: ResolvedDeployment;
   auth: UpstreamAuth;
@@ -359,6 +392,7 @@ export async function proxyJson(input: {
   path: string;
   body?: JsonMap | null;
   timeoutMs?: number;
+  signal?: AbortSignal;
   rawBody?: BodyInit | null;
   contentType?: string;
   groupStrategy?: string;
@@ -377,7 +411,7 @@ export async function proxyJson(input: {
   } else if (input.contentType) {
     headers["Content-Type"] = input.contentType;
   }
-  const signal = AbortSignal.timeout(input.timeoutMs && input.timeoutMs > 0 ? input.timeoutMs : 120_000);
+  const signal = upstreamSignal(input.timeoutMs, input.signal);
   const payload =
     input.rawBody == null && input.body && method !== "GET" && method !== "HEAD"
       ? prepareBody(input.dep, input.path, input.body, input.groupStrategy, input.headers)
@@ -416,6 +450,7 @@ async function proxyRaw(input: {
   rawBody?: BodyInit | null;
   contentType?: string;
   timeoutMs?: number;
+  signal?: AbortSignal;
   groupStrategy?: string;
   headers?: Record<string, string>;
 }): Promise<{ status: number; raw: Uint8Array; contentType: string; headers: Headers }> {
@@ -445,7 +480,7 @@ async function proxyRaw(input: {
             prepareBody(input.dep, input.path, input.body, input.groupStrategy, input.headers),
           )
         : undefined),
-    signal: AbortSignal.timeout(input.timeoutMs && input.timeoutMs > 0 ? input.timeoutMs : 120_000),
+    signal: upstreamSignal(input.timeoutMs, input.signal),
   });
   observeUpstreamLimits(input.dep, res.headers);
   observeUpstreamStatus(input.dep, res.status);
@@ -610,6 +645,7 @@ export async function forwardToModel(
     headers?: Record<string, string>;
     pool?: RoutePool;
     timeoutMs?: number;
+    signal?: AbortSignal;
   },
 ): Promise<ProxyFirstResult> {
   let last: GateError = new GateError(404, "model_not_found", "no deployment for model", { param: "model" });
@@ -618,6 +654,7 @@ export async function forwardToModel(
   const access = accessOf(principal);
   const pool = opts?.pool ?? "api";
   const inPool = routable(pool);
+  const run: RunRouting = { session: "", tried: new Set(), affinity: runAffinity(principal, body, opts?.headers) };
   for (const alias of aliases) {
     if (!alias || alias === "auto") continue;
     let limitReason: string | null = null;
@@ -635,6 +672,7 @@ export async function forwardToModel(
     const attempts = Math.max(0, group.num_retries) + 1;
     let depleted = 0;
     for (let attempt = 0; attempt < attempts; attempt++) {
+      if (opts?.signal?.aborted) throw callerAborted(opts.signal);
       let acquired;
       try {
         acquired = await acquireGroup(
@@ -644,6 +682,7 @@ export async function forwardToModel(
           requestRoutingOverride(body),
           cost,
           access,
+          run,
         );
       } catch (err) {
         if (costRejected(err)) throw err;
@@ -673,12 +712,14 @@ export async function forwardToModel(
           groupStrategy: group.strategy,
           headers: opts?.headers,
           timeoutMs: opts?.timeoutMs,
+          signal: opts?.signal,
         };
         const proxied = opts?.binary
           ? { ...(await proxyRaw(request)), json: {} as unknown }
           : await proxyJson(request);
         if (proxied.status < 400) {
           markSuccess(dep, Date.now() - started);
+          if (pool !== "internal") noteServed(principal.trace, dep, acquired.affinity);
           return {
             status: proxied.status,
             json: proxied.json,
@@ -692,6 +733,7 @@ export async function forwardToModel(
             group,
           };
         }
+        run.affinity?.failed.add(dep.id);
         const json = opts?.binary
           ? (() => {
               try {
@@ -716,6 +758,8 @@ export async function forwardToModel(
         if (proxied.status === 429) markThrottled(dep);
         markFailure(dep, last.retryAt);
       } catch (err) {
+        if (opts?.signal?.aborted) throw callerAborted(opts.signal);
+        run.affinity?.failed.add(dep.id);
         if (err instanceof GateError && !retryableStatus(err.status)) throw err;
         markFailure(dep, err instanceof GateError ? err.retryAt : null);
         last = err instanceof GateError ? err : new GateError(502, "upstream_error", "upstream request failed");

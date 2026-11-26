@@ -21,9 +21,10 @@ export default function DeveloperPage() {
     return <PageStatus icon={Code2} title={t("title")} subtitle={t("subtitle")} state={page} tabs layout="chat" />;
   }
 
+  const canSeeMcp = granted.includes(PERMISSIONS.SETTINGS_READ) || granted.includes(PERMISSIONS.MCP_READ);
   const tabs = [
     ...(granted.includes(PERMISSIONS.KEYS_READ)
-      ? [{ id: "connect", label: t("tab", { tab: "connect" }), panel: <ConnectTab /> }]
+      ? [{ id: "connect", label: t("tab", { tab: "connect" }), panel: <ConnectTab canSeeMcp={canSeeMcp} /> }]
       : []),
     ...(granted.includes(PERMISSIONS.PLAYGROUND_USE)
       ? [{ id: "playground", label: t("tab", { tab: "playground" }), panel: <PlaygroundTab /> }]

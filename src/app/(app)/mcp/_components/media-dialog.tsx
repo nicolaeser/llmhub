@@ -1,14 +1,16 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Alert, Description, Input, Label, Switch, TextField, toast, type useOverlayState } from "@heroui/react";
-import { useTranslations } from "next-intl";
+import { Alert, Description, Input, Label, TextField, toast, type useOverlayState } from "@heroui/react";
+import { useFormatter, useTranslations } from "next-intl";
 import FormDialog from "@/components/console/form-dialog";
 import SearchSelect from "@/components/console/search-select";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
-import type { McpMediaKind, McpMediaModel, McpServerView } from "@/types/mcp";
+import { mediaToolsAt } from "@/lib/mcp/media-tools";
+import type { McpAccessLevel, McpMediaKind, McpMediaModel, McpServerView } from "@/types/mcp";
 import { createMediaMcpServerAction, updateMediaMcpServerAction } from "../_action";
+import { DefaultAccessSelect } from "./access-fields";
 
 const NONE = "media:none";
 const KINDS: readonly McpMediaKind[] = ["image", "speech", "video", "transcription"];
@@ -24,7 +26,8 @@ function picksOf(server: McpServerView | null, models: McpMediaModel[]): ModelPi
       transcription: server.media.transcription.model,
     };
   }
-  return { image: models.find((model) => model.media)?.alias ?? "", speech: "", video: "", transcription: "" };
+  const first = (kind: McpMediaKind) => models.find((model) => model.kinds.includes(kind))?.alias ?? "";
+  return { image: first("image"), speech: first("speech"), video: first("video"), transcription: first("transcription") };
 }
 
 export default function MediaDialog({
@@ -39,28 +42,29 @@ export default function MediaDialog({
   onSaved: (server: McpServerView) => void;
 }) {
   const t = useTranslations("Mcp");
+  const format = useFormatter();
   const showError = useErrorToast();
   const [name, setName] = useState(editing?.name ?? "media");
   const [description, setDescription] = useState(editing?.description ?? "");
   const [picks, setPicks] = useState<ModelPicks>(() => picksOf(editing, models));
   const [voice, setVoice] = useState(editing?.media?.speech.voice ?? "");
-  const [global, setGlobal] = useState(editing?.global ?? false);
+  const [defaultAccess, setDefaultAccess] = useState<McpAccessLevel>(editing?.defaultAccess ?? "none");
   const [pending, start] = useTransition();
   const mode = editing ? "edit" : "add";
   const known = new Set(models.map((model) => model.alias));
-  const baseItems = [
-    { id: NONE, label: t("media.none") },
-    ...models.map((model) => ({
-      id: model.alias,
-      label: model.label || model.alias,
-      detail: model.media ? t("media.mediaModel") : undefined,
-    })),
-  ];
+  const everyone = mediaToolsAt(defaultAccess, KINDS.filter((kind) => picks[kind]));
+  const none = { id: NONE, label: t("media.none") };
 
   function itemsFor(kind: McpMediaKind) {
+    const fitting = models.filter((model) => model.kinds.includes(kind));
+    const others = models.filter((model) => !model.kinds.includes(kind));
+    const items = [
+      ...fitting.map((model) => ({ id: model.alias, label: model.label || model.alias, detail: t("media.fits", { kind }) })),
+      ...others.map((model) => ({ id: model.alias, label: model.label || model.alias })),
+    ];
     const saved = editing?.media?.[kind].model ?? "";
-    if (!saved || known.has(saved)) return baseItems;
-    return [baseItems[0]!, { id: saved, label: saved, detail: t("media.unavailableModel") }, ...baseItems.slice(1)];
+    if (!saved || known.has(saved)) return [none, ...items];
+    return [none, { id: saved, label: saved, detail: t("media.unavailableModel") }, ...items];
   }
 
   function save(close: () => void) {
@@ -73,7 +77,7 @@ export default function MediaDialog({
         speechVoice: voice.trim(),
         videoModel: picks.video,
         transcriptionModel: picks.transcription,
-        global,
+        defaultAccess,
         enabled: editing?.enabled ?? true,
       };
       const result = editing
@@ -136,15 +140,15 @@ export default function MediaDialog({
           <Description>{t("media.voiceHint")}</Description>
         </TextField>
       ) : null}
-      <Switch isSelected={global} onChange={setGlobal} isDisabled={pending}>
-        <Switch.Content>
-          <Switch.Control>
-            <Switch.Thumb />
-          </Switch.Control>
-          <Label>{t("media.global")}</Label>
-        </Switch.Content>
-        <Description>{t("media.globalHint")}</Description>
-      </Switch>
+      <div className="space-y-2">
+        <DefaultAccessSelect value={defaultAccess} onChange={setDefaultAccess} isDisabled={pending} />
+        <p className="text-sm text-muted" aria-live="polite">
+          {t("media.everyone", {
+            count: everyone.length,
+            tools: format.list(everyone, { type: "conjunction" }),
+          })}
+        </p>
+      </div>
     </FormDialog>
   );
 }

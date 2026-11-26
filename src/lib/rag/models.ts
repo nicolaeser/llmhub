@@ -1,5 +1,5 @@
 import "server-only";
-import { usageFromUnknown } from "@/lib/gateway/billing/billing";
+import { embeddingTokenUsage, usageFromUnknown } from "@/lib/gateway/billing/billing";
 import { asNumber, asRecord } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
 import { allowModel, applyGuardrails, featureModelPermitted, modelChain, withTrace } from "@/lib/gateway/access/gate";
@@ -76,7 +76,7 @@ export async function forwardModelCall(input: {
   }
 }
 
-function embeddingUsage(json: unknown): Partial<TokenUsage> {
+function ocrUsage(json: unknown): Partial<TokenUsage> {
   return usageFromUnknown(asRecord(json)?.usage, json);
 }
 
@@ -95,7 +95,7 @@ export async function embedTexts(input: {
     chosenBy: "admin",
     path: "/embeddings",
     body,
-    usage: embeddingUsage,
+    usage: (json) => embeddingTokenUsage(json, body.input),
   });
   const data = asRecord(hit.json)?.data;
   const rows = Array.isArray(data) ? data.map((item) => asRecord(item)).filter((item) => item !== null) : [];
@@ -122,7 +122,7 @@ export async function ocrDocument(input: {
     chosenBy: "admin",
     path: "/ocr",
     body: { model: input.model, document: input.document },
-    usage: embeddingUsage,
+    usage: ocrUsage,
   });
   return ocrText(hit.json);
 }

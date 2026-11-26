@@ -55,6 +55,10 @@ function fakeModel(model: string) {
       record("create", args);
       return { id: `${model}_1`, createdAt: new Date(), ...args.data };
     },
+    createMany: async (args: { data: Row[]; skipDuplicates?: boolean }) => {
+      calls.push({ model, method: "createMany", args: { data: { rows: args.data } } });
+      return { count: args.data.length };
+    },
   };
 }
 
@@ -399,6 +403,68 @@ test("stored log content is masked with the effective PII policy, including over
   assert.ok(keyOff.includes("ada@acme.com"));
 });
 
+test("inline images are stored once as attachments and replaced by a reference unless attachment storage is off", async () => {
+  const { writeRequestLog } = await import("@/lib/gateway/request-logs/request-log");
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(300, 7)]);
+  const dataUrl = `data:image/png;base64,${png.toString("base64")}`;
+  const write = async (who: Principal) => {
+    calls.length = 0;
+    await writeRequestLog({
+      principal: who,
+      model: "gpt",
+      deployment,
+      status: 200,
+      outcome: "ok",
+      latencyMs: 5,
+      tag: "",
+      promptTokens: 1,
+      completionTokens: 1,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      cost: 0,
+      request: {
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "what is this?" },
+              { type: "image_url", image_url: { url: dataUrl } },
+              { type: "image_url", image_url: { url: dataUrl } },
+            ],
+          },
+        ],
+      },
+      response: { choices: [{ message: { role: "assistant", content: "a picture" } }] },
+    });
+    return storedLog();
+  };
+
+  const log = await write(principal({ key: keyView() }));
+  const stored = calls.find((call) => call.model === "logAttachment" && call.method === "createMany");
+  const rows = (stored?.args.data as { rows: { id: string; contentType: string; bytes: number }[] }).rows;
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.contentType, "image/png");
+  assert.equal(rows[0]?.bytes, png.byteLength);
+  const content = log.contents?.create as unknown as { request: unknown; sizeBytes: number; attachments: { create: { attachmentId: string }[] } };
+  assert.deepEqual(content.attachments.create, [{ attachmentId: rows[0]?.id }]);
+  const text = JSON.stringify(content.request);
+  assert.equal(text.includes(png.toString("base64").slice(0, 40)), false);
+  assert.ok(text.includes(`llmhub-attachment:${rows[0]?.id};image/png`));
+  assert.ok(content.sizeBytes >= png.byteLength);
+
+  enterprise = { log_attachments: false };
+  const masked = await write(principal({ key: keyView() }));
+  assert.equal(calls.some((call) => call.model === "logAttachment" && call.method === "createMany"), false);
+  const maskedContent = masked.contents?.create as Row;
+  assert.equal("attachments" in maskedContent, false);
+  assert.equal(JSON.stringify(maskedContent.request).includes("llmhub-attachment:"), false);
+
+  enterprise = {};
+  const off = await write(principal({ key: keyView({ log_content: false }) }));
+  assert.equal(off.contents, undefined);
+  assert.equal(calls.some((call) => call.model === "logAttachment"), false);
+});
+
 test("restore mode records which placeholders went out and where the reply used them, never the values", async () => {
   const { writeRequestLog } = await import("@/lib/gateway/request-logs/request-log");
   const { PiiVault, bindPiiVault } = await import("@/lib/gateway/safety/pii-vault");
@@ -467,7 +533,7 @@ test("assertBudget is async and resolves to the remaining budget", async () => {
   table("virtualKey").set("key_1", { id: "key_1", spend: 4, maxBudget: 10, budgetDuration: "", spendResetAt: null, createdAt: new Date() });
   const pending = assertBudget(principal({ key: keyView() }));
   assert.ok(pending instanceof Promise);
-  assert.deepEqual(await pending, { limit: 6, budget: "key" });
+  assert.deepEqual(await pending, { cap: { limit: 6, budget: "key" }, ceilings: [] });
 
   table("virtualKey").set("key_1", { id: "key_1", spend: 10, maxBudget: 10, budgetDuration: "", spendResetAt: null, createdAt: new Date() });
   await assert.rejects(assertBudget(principal({ key: keyView() })), rejectsWith(429, "budget_exceeded", "key budget exceeded"));

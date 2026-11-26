@@ -26,6 +26,7 @@ export default function AccessRules({
   options,
   policy,
   defaultScope = "org",
+  connectedOrgs = null,
   pending,
 }: {
   rules: McpAssignmentView[];
@@ -36,6 +37,7 @@ export default function AccessRules({
   options: McpTargetOptions | null;
   policy: Pick<McpServerPolicy, "toolsRestricted" | "allowedTools" | "tools">;
   defaultScope?: AssignmentScope;
+  connectedOrgs?: string[] | null;
   pending: boolean;
 }) {
   const t = useTranslations("Mcp.assign");
@@ -238,7 +240,7 @@ export default function AccessRules({
           </>
         )}
       </div>
-      <AccessPreview policy={server} rules={rules} options={known} labelOf={labelOf} isDisabled={pending} />
+      <AccessPreview policy={server} rules={rules} options={known} labelOf={labelOf} connectedOrgs={connectedOrgs} isDisabled={pending} />
     </div>
   );
 }

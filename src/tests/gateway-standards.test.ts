@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { nativeMessagesBody } from "@/lib/gateway/protocols/anthropic";
-import { usageFromUnknown } from "@/lib/gateway/billing/billing";
+import { embeddingTokenUsage, usageFromUnknown } from "@/lib/gateway/billing/billing";
 import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
 import { modelEntry } from "@/lib/gateway/core";
 import { costOf } from "@/lib/gateway/billing/cost";
@@ -37,6 +37,37 @@ test("typesafe is a catalog kind with the TypeSafe API base", () => {
     "https://ai-gateway.vercel.sh/typesafe/v1/systemone",
   );
   assert.equal(joinPath(dep("openrouter"), "/systemone"), "https://openrouter.ai/api/v1/systemone");
+});
+
+test("OpenAI-shaped providers take embeddings on their own /embeddings path with the deployment model", () => {
+  const body = { model: "text-embedding-3-small", input: ["a", "b"], dimensions: 256, fallbacks: ["other"] };
+  for (const [kind, url] of [
+    ["openrouter", "https://openrouter.ai/api/v1/embeddings"],
+    ["openrouter_eu", "https://eu.openrouter.ai/api/v1/embeddings"],
+    ["openai", "https://api.openai.com/v1/embeddings"],
+  ] as const) {
+    const target = dep(kind, "", "openai/text-embedding-3-small");
+    assert.equal(joinPath(target, "/embeddings"), url);
+    assert.deepEqual(prepareBody(target, "/embeddings", body), {
+      model: "openai/text-embedding-3-small",
+      input: ["a", "b"],
+      dimensions: 256,
+    });
+  }
+});
+
+test("embedding usage keeps upstream counts and estimates the input when the upstream reports none", () => {
+  const tokens = (json: unknown, input: unknown) => {
+    const usage = embeddingTokenUsage(json, input);
+    return [usage.prompt_tokens, usage.completion_tokens, usage.total_tokens];
+  };
+  assert.deepEqual(tokens({ usage: { prompt_tokens: 7, total_tokens: 7 } }, "ignored"), [7, 0, 7]);
+  assert.deepEqual(tokens({ object: "list", data: [{ embedding: [0.1] }] }, "abcdefgh"), [2, 0, 2]);
+  assert.deepEqual(tokens({ usage: { prompt_tokens: 0, total_tokens: 0 } }, ["abcd", "abcdefghi"]), [4, 0, 4]);
+  assert.deepEqual(tokens({}, [1, 2, 3, 4, 5]), [5, 0, 5]);
+  assert.deepEqual(tokens({}, [[1, 2], [3, 4, 5]]), [5, 0, 5]);
+  assert.deepEqual(tokens(null, undefined), [0, 0, 0]);
+  assert.equal(embeddingTokenUsage({ usage: { cost: 0.001 } }, "abcd").cost, 0.001);
 });
 
 test("typesafe drops service tier hints the TypeSafe API does not define", () => {

@@ -228,12 +228,35 @@ test("assertBudget checks the whole chain: key, user, member, project, team, and
   holder("member", "m", { spend: 15, maxBudget: 20 });
   holder("member", "stale_member", { spend: 50, maxBudget: 20 });
   calls.length = 0;
-  assert.deepEqual(await assertBudget(chainPrincipal()), { limit: 5, budget: "member" });
+  assert.deepEqual(await assertBudget(chainPrincipal()), { cap: { limit: 5, budget: "member" }, ceilings: [] });
   assert.deepEqual(new Set(calls.map((call) => call.model)), new Set([...HOLDER_TABLES, "tempBudget"]));
 
   holder("member", "m", { spend: 25, maxBudget: 20 });
   tempBudgets.push({ entityType: "member", entityId: "m", amount: 12 });
-  assert.deepEqual(await assertBudget(chainPrincipal()), { limit: 7, budget: "member" });
+  assert.deepEqual(await assertBudget(chainPrincipal()), { cap: { limit: 7, budget: "member" }, ceilings: [] });
+});
+
+test("assertBudget turns hard and capped soft budgets into ceilings and keeps open soft budgets as the cost cap", async () => {
+  const { assertBudget } = await import("@/lib/gateway/billing/billing");
+  for (const [, model, id] of CHAIN) holder(model, id);
+  holder("member", "m", { spend: 15, maxBudget: 20 });
+  holder("team", "t", { spend: 10, maxBudget: 50, budgetMode: "soft", budgetOverrunPct: 10 });
+  holder("organization", "o", { spend: 40, maxBudget: 100, budgetMode: "hard", budgetOverrunPct: 30 });
+  tempBudgets.length = 0;
+  tempBudgets.push({ entityType: "org", entityId: "o", amount: 20 });
+  const limits = await assertBudget(chainPrincipal());
+  assert.deepEqual(limits.cap, { limit: 5, budget: "member" });
+  assert.deepEqual(
+    limits.ceilings.map((ceiling) => [ceiling.kind, ceiling.id, Math.round(ceiling.limit * 100) / 100]),
+    [
+      ["team", "t", 55],
+      ["org", "o", 120],
+    ],
+  );
+
+  holder("organization", "o", { spend: 120, maxBudget: 100, budgetMode: "hard" });
+  await assert.rejects(assertBudget(chainPrincipal()), rejectsWith(429, "budget_exceeded", "org budget exceeded"));
+  tempBudgets.length = 0;
 });
 
 test("recordUsage charges the user and member budgets alongside key, team, org, and project", async () => {
@@ -291,7 +314,7 @@ test("period resets only win once under concurrency", async () => {
 
   holder("user", "u", { spend: 3, maxBudget: 100, budgetDuration: "1d", spendResetAt: otherReset });
   staleReads.set("user:u", { ...table("user").get("u"), spend: 90, spendResetAt: staleReset });
-  assert.deepEqual(await assertBudget(user), { limit: 100, budget: "user" });
+  assert.deepEqual(await assertBudget(user), { cap: { limit: 100, budget: "user" }, ceilings: [] });
   assert.deepEqual(
     charged("user").map((call) => call.args.where),
     [{ id: "u", spendResetAt: staleReset }],
@@ -410,7 +433,7 @@ test("customer keys are never billed to the console user who created them", asyn
   for (const id of ["member_key", "project_key"]) {
     const principal = await authenticateBearer(token(id));
     assert.equal(principal.userId, "", id);
-    assert.equal(await assertBudget(principal), null, id);
+    assert.deepEqual(await assertBudget(principal), { cap: null, ceilings: [] }, id);
     calls.length = 0;
     await recordUsage({
       principal,
