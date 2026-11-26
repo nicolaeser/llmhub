@@ -4,7 +4,7 @@ Load when changing deployment selection in `acquireGroup`, deployment or account
 
 ## Why it exists
 
-Self-hosted inference servers (vLLM, SGLang, llama.cpp, TGI) keep a prefix/KV cache per replica. Coding agents resend the whole, only-growing conversation every step (20k–200k tokens), so a step that lands on another replica re-prefills everything and slows every other request on that replica. Measured on two GPUs with one vLLM replica each: a follow-up turn at 78k tokens took about 50 s when hopping and about 3 s when staying; four agents generated 59 vs 94 tok/s. A load balancer in front of the replicas cannot help, because all traffic comes from the hub without cookies. The gateway is the only place that can tell conversations apart.
+Self-hosted inference servers (vLLM, SGLang, llama.cpp, TGI) keep a prefix/KV cache per replica. Coding agents resend the whole, only-growing conversation every step (20k–200k tokens), so a step that lands on another replica re-prefills everything and slows every other request on that replica. With long conversations the re-prefill dominates time to first token, so staying on the replica turns a long wait into a short one. A load balancer in front of the replicas cannot help, because all traffic comes from the hub without cookies. The gateway is the only place that can tell conversations apart.
 
 ## Decisions
 
